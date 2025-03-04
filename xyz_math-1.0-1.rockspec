@@ -6,12 +6,7 @@ source = {
 }
 description = {
 	summary = "A 3D math library for Lua",
-	detailed = [[
-		XYZ Math is a 3D mathematics library for Lua.
-		It provides vector, matrix, and geometry primitives with a clean,
-		object-oriented API. Includes 2D, 3D, and 4D vectors, 3x3 and 4x4
-		matrices, rays, planes, bounding volumes, and utility functions.
-	]],
+	detailed = [[XYZ Math is a 3D mathematics library for Lua. It provides vector, matrix, and geometry primitives with a clean, object-oriented API. Includes 2D, 3D, and 4D vectors, 3x3 and 4x4 matrices, rays, planes, bounding volumes, and utility functions.]],
 	homepage = "https://github.com/xyz-ai-dev/xyz_math",
 	license = "MIT"
 }
