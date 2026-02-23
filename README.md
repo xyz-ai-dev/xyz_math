@@ -72,6 +72,12 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `normalize()`: Returns normalized vector
   * `length()`: Returns vector length
   * `lerp(other, t)`: Linear interpolation
+  * `length_squared()`: Returns squared length (no sqrt, faster for comparisons)
+  * `distance_squared(other)`: Returns squared distance to another vector
+  * `reflect(normal)`: Returns reflection of vector across a normal
+  * `project(onto)`: Returns projection of vector onto another vector
+  * `angle_between(other)`: Returns angle in radians between two vectors
+  * `is_zero()`: Returns true if all components are within epsilon of zero
 
 #### XVec3
 3D vector with x, y, z components.
@@ -90,6 +96,12 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `normalize()`: Returns normalized vector
   * `length()`: Returns vector length
   * `lerp(other, t)`: Linear interpolation
+  * `length_squared()`: Returns squared length (no sqrt, faster for comparisons)
+  * `distance_squared(other)`: Returns squared distance to another vector
+  * `reflect(normal)`: Returns reflection of vector across a normal
+  * `project(onto)`: Returns projection of vector onto another vector
+  * `angle_between(other)`: Returns angle in radians between two vectors
+  * `is_zero()`: Returns true if all components are within epsilon of zero
 
 #### XVec4
 4D vector with x, y, z, w components.
@@ -107,6 +119,12 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `normalize()`: Returns normalized vector
   * `length()`: Returns vector length
   * `lerp(other, t)`: Linear interpolation
+  * `length_squared()`: Returns squared length (no sqrt, faster for comparisons)
+  * `distance_squared(other)`: Returns squared distance to another vector
+  * `reflect(normal)`: Returns reflection of vector across a normal
+  * `project(onto)`: Returns projection of vector onto another vector
+  * `angle_between(other)`: Returns angle in radians between two vectors
+  * `is_zero()`: Returns true if all components are within epsilon of zero
 
 ### Matrix Types
 
@@ -140,6 +158,9 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
 - Methods:
   * `inverse()`: Returns inverse matrix (cofactor expansion, errors on singular)
   * `decompose()`: Decomposes TRS matrix into translation (XVec3), rotation (XQuat), scale (XVec3)
+  * `transpose()`: Returns transposed matrix
+  * `transform_point(p)`: Transforms XVec3 point (w=1 implied), returns XVec3
+  * `transform_direction(v)`: Transforms XVec3 direction (w=0 implied, ignores translation), returns XVec3
 - Static methods:
   * `scale()`: Creates scaling matrix
   * `translate()`: Creates translation matrix
@@ -148,6 +169,7 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `rotation_z()`: Creates rotation matrix around Z axis
   * `rotation_around_axis()`: Creates rotation matrix around arbitrary axis
   * `from_euler()`: Creates rotation matrix from Euler angles
+  * `from_trs(translation, rotation, scale)`: Creates TRS matrix from XVec3 translation, XQuat rotation, XVec3 scale
   * `look_at(eye, center, up)`: Creates a view matrix (world to camera space)
   * `perspective(fov_y, aspect, near, far)`: Creates a perspective projection matrix from vertical FOV (radians)
   * `frustum(left, right, bottom, top, near, far)`: Creates a perspective projection matrix from explicit frustum bounds
@@ -170,8 +192,10 @@ Quaternion with x, y, z, w components (`w=1` identity). Avoids gimbal lock and i
   * `conjugate()`: Returns `(-x, -y, -z, w)`
   * `inverse()`: Returns inverse quaternion (`conjugate / length²`)
   * `slerp(other, t)`: Spherical linear interpolation (shortest path)
+  * `nlerp(other, t)`: Normalized linear interpolation (faster than slerp, shortest path)
   * `to_mat3()`: Convert to XMat3 rotation matrix
   * `to_mat4()`: Convert to XMat4 rotation matrix
+  * `to_euler()`: Convert to Euler angles (x, y, z radians, Z*Y*X convention)
 - Static methods:
   * `from_axis_angle(axis, angle)`: Create from axis (XVec3) and angle (radians)
   * `from_euler(x, y, z)`: Create from Euler angles (Z*Y*X convention, radians)

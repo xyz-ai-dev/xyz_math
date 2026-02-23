@@ -133,6 +133,45 @@ function XVec2:lerp(other, t)
     )
 end
 
+function XVec2:length_squared()
+    return self.x * self.x + self.y * self.y
+end
+
+function XVec2:distance_squared(other)
+    local dx = self.x - other.x
+    local dy = self.y - other.y
+    return dx * dx + dy * dy
+end
+
+function XVec2:reflect(normal)
+    local d = 2 * (self.x * normal.x + self.y * normal.y)
+    return XVec2.new(self.x - d * normal.x, self.y - d * normal.y)
+end
+
+function XVec2:project(onto)
+    local onto_dot = onto.x * onto.x + onto.y * onto.y
+    if onto_dot < 1e-18 then
+        return XVec2.new(0, 0)
+    end
+    local s = (self.x * onto.x + self.y * onto.y) / onto_dot
+    return XVec2.new(s * onto.x, s * onto.y)
+end
+
+function XVec2:angle_between(other)
+    local len_a = math.sqrt(self.x * self.x + self.y * self.y)
+    local len_b = math.sqrt(other.x * other.x + other.y * other.y)
+    if len_a < 1e-9 or len_b < 1e-9 then
+        return 0
+    end
+    local d = (self.x * other.x + self.y * other.y) / (len_a * len_b)
+    if d > 1 then d = 1 elseif d < -1 then d = -1 end
+    return math.acos(d)
+end
+
+function XVec2:is_zero()
+    return math.abs(self.x) <= EPSILON and math.abs(self.y) <= EPSILON
+end
+
 XVec3 = {}
 XVec3_mt = {__index = XVec3}
 
@@ -215,6 +254,46 @@ function XVec3:lerp(other, t)
     )
 end
 
+function XVec3:length_squared()
+    return self.x * self.x + self.y * self.y + self.z * self.z
+end
+
+function XVec3:distance_squared(other)
+    local dx = self.x - other.x
+    local dy = self.y - other.y
+    local dz = self.z - other.z
+    return dx * dx + dy * dy + dz * dz
+end
+
+function XVec3:reflect(normal)
+    local d = 2 * (self.x * normal.x + self.y * normal.y + self.z * normal.z)
+    return XVec3.new(self.x - d * normal.x, self.y - d * normal.y, self.z - d * normal.z)
+end
+
+function XVec3:project(onto)
+    local onto_dot = onto.x * onto.x + onto.y * onto.y + onto.z * onto.z
+    if onto_dot < 1e-18 then
+        return XVec3.new(0, 0, 0)
+    end
+    local s = (self.x * onto.x + self.y * onto.y + self.z * onto.z) / onto_dot
+    return XVec3.new(s * onto.x, s * onto.y, s * onto.z)
+end
+
+function XVec3:angle_between(other)
+    local len_a = math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+    local len_b = math.sqrt(other.x * other.x + other.y * other.y + other.z * other.z)
+    if len_a < 1e-9 or len_b < 1e-9 then
+        return 0
+    end
+    local d = (self.x * other.x + self.y * other.y + self.z * other.z) / (len_a * len_b)
+    if d > 1 then d = 1 elseif d < -1 then d = -1 end
+    return math.acos(d)
+end
+
+function XVec3:is_zero()
+    return math.abs(self.x) <= EPSILON and math.abs(self.y) <= EPSILON and math.abs(self.z) <= EPSILON
+end
+
 XVec4 = {}
 XVec4_mt = {__index = XVec4}
 
@@ -287,6 +366,48 @@ function XVec4:lerp(other, t)
         self.z + (other.z - self.z) * t,
         self.w + (other.w - self.w) * t
     )
+end
+
+function XVec4:length_squared()
+    return self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
+end
+
+function XVec4:distance_squared(other)
+    local dx = self.x - other.x
+    local dy = self.y - other.y
+    local dz = self.z - other.z
+    local dw = self.w - other.w
+    return dx * dx + dy * dy + dz * dz + dw * dw
+end
+
+function XVec4:reflect(normal)
+    local d = 2 * (self.x * normal.x + self.y * normal.y + self.z * normal.z + self.w * normal.w)
+    return XVec4.new(self.x - d * normal.x, self.y - d * normal.y, self.z - d * normal.z, self.w - d * normal.w)
+end
+
+function XVec4:project(onto)
+    local onto_dot = onto.x * onto.x + onto.y * onto.y + onto.z * onto.z + onto.w * onto.w
+    if onto_dot < 1e-18 then
+        return XVec4.new(0, 0, 0, 0)
+    end
+    local s = (self.x * onto.x + self.y * onto.y + self.z * onto.z + self.w * onto.w) / onto_dot
+    return XVec4.new(s * onto.x, s * onto.y, s * onto.z, s * onto.w)
+end
+
+function XVec4:angle_between(other)
+    local len_a = math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w)
+    local len_b = math.sqrt(other.x * other.x + other.y * other.y + other.z * other.z + other.w * other.w)
+    if len_a < 1e-9 or len_b < 1e-9 then
+        return 0
+    end
+    local d = (self.x * other.x + self.y * other.y + self.z * other.z + self.w * other.w) / (len_a * len_b)
+    if d > 1 then d = 1 elseif d < -1 then d = -1 end
+    return math.acos(d)
+end
+
+function XVec4:is_zero()
+    return math.abs(self.x) <= EPSILON and math.abs(self.y) <= EPSILON
+       and math.abs(self.z) <= EPSILON and math.abs(self.w) <= EPSILON
 end
 
 function XRGB(r, g, b)
@@ -615,9 +736,20 @@ function XMat4.from_euler(x, y, z)
 	local rx = XMat4.rotation_x(x)
 	local ry = XMat4.rotation_y(y)
 	local rz = XMat4.rotation_z(z)
-	
+
 	-- Combine rotations (order: Z * Y * X)
 	return rz * ry * rx
+end
+
+function XMat4.from_trs(translation, rotation, scale)
+    local m = rotation:to_mat4()
+    local sx, sy, sz = scale.x, scale.y, scale.z
+    return XMat4.new(
+        m[1] * sx, m[2] * sy, m[3] * sz, translation.x,
+        m[5] * sx, m[6] * sy, m[7] * sz, translation.y,
+        m[9] * sx, m[10] * sy, m[11] * sz, translation.z,
+        0, 0, 0, 1
+    )
 end
 
 function XMat4.look_at(eye, center, up)
@@ -732,6 +864,31 @@ function XMat4:decompose()
     return translation, rotation, scale
 end
 
+function XMat4:transpose()
+    return XMat4.new(
+        self[1], self[5], self[9],  self[13],
+        self[2], self[6], self[10], self[14],
+        self[3], self[7], self[11], self[15],
+        self[4], self[8], self[12], self[16]
+    )
+end
+
+function XMat4:transform_point(p)
+    return XVec3.new(
+        self[1] * p.x + self[2] * p.y + self[3] * p.z + self[4],
+        self[5] * p.x + self[6] * p.y + self[7] * p.z + self[8],
+        self[9] * p.x + self[10] * p.y + self[11] * p.z + self[12]
+    )
+end
+
+function XMat4:transform_direction(v)
+    return XVec3.new(
+        self[1] * v.x + self[2] * v.y + self[3] * v.z,
+        self[5] * v.x + self[6] * v.y + self[7] * v.z,
+        self[9] * v.x + self[10] * v.y + self[11] * v.z
+    )
+end
+
 XQuat = {}
 XQuat_mt = {__index = XQuat}
 
@@ -837,6 +994,22 @@ function XQuat:slerp(other, t)
     )
 end
 
+function XQuat:nlerp(other, t)
+    local b = other
+    if self:dot(other) < 0 then
+        b = XQuat.new(-other.x, -other.y, -other.z, -other.w)
+    end
+    local rx = self.x + (b.x - self.x) * t
+    local ry = self.y + (b.y - self.y) * t
+    local rz = self.z + (b.z - self.z) * t
+    local rw = self.w + (b.w - self.w) * t
+    local len = math.sqrt(rx * rx + ry * ry + rz * rz + rw * rw)
+    if len > 0 then
+        return XQuat.new(rx / len, ry / len, rz / len, rw / len)
+    end
+    return XQuat.new(0, 0, 0, 1)
+end
+
 function XQuat:to_mat3()
     local x, y, z, w = self.x, self.y, self.z, self.w
     local x2, y2, z2 = x + x, y + y, z + z
@@ -864,6 +1037,31 @@ function XQuat:to_mat4()
         xz - wy,       yz + wx,       1 - (xx + yy), 0,
         0,             0,             0,             1
     )
+end
+
+function XQuat:to_euler()
+    local m = self:to_mat3()
+    -- Z*Y*X convention: R = Rz * Ry * Rx
+    -- Row-major layout:
+    -- [cy*cz, cz*sx*sy - cx*sz, cx*cz*sy + sx*sz]
+    -- [cy*sz, cx*cz + sx*sy*sz, cx*sy*sz - cz*sx]
+    -- [-sy,   cy*sx,            cx*cy            ]
+    local sin_y = -m[7]
+    if sin_y > 1 then sin_y = 1 elseif sin_y < -1 then sin_y = -1 end
+    local y_angle = math.asin(sin_y)
+
+    local x_angle, z_angle
+    local cos_y = math.sqrt(1 - sin_y * sin_y)
+    if cos_y > 1e-6 then
+        x_angle = math.atan2(m[8], m[9])
+        z_angle = math.atan2(m[4], m[1])
+    else
+        -- Gimbal lock
+        x_angle = math.atan2(-m[6], m[5])
+        z_angle = 0
+    end
+
+    return x_angle, y_angle, z_angle
 end
 
 function XQuat.from_axis_angle(axis, angle)
