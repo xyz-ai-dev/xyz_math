@@ -184,6 +184,16 @@ function XVec2:is_zero()
     return math.abs(self.x) <= EPSILON and math.abs(self.y) <= EPSILON
 end
 
+function XVec2:rotate(angle)
+    local c = math.cos(angle)
+    local s = math.sin(angle)
+    return XVec2.new(self.x * c - self.y * s, self.x * s + self.y * c)
+end
+
+function XVec2:perpendicular()
+    return XVec2.new(-self.y, self.x)
+end
+
 XVec3 = {}
 XVec3_mt = {__index = XVec3}
 
@@ -2395,6 +2405,267 @@ function XColor.from_hsl(h, s, l, a)
         r, g, b = c, 0, x
     end
     return XColor.new(r + m, g + m, b + m, a)
+end
+
+-- 2D Geometry
+
+XCircle = {}
+XCircle_mt = {__index = XCircle}
+
+function XCircle.new(center, radius)
+    if not center then center = XVec2.new(0, 0) end
+    if not radius then radius = 0 end
+    return setmetatable({center = center, radius = radius}, XCircle_mt)
+end
+
+setmetatable(XCircle, {
+    __call = function(_, center, radius)
+        return XCircle.new(center, radius)
+    end
+})
+
+XCircle_mt.__tostring = function(self)
+    return string.format("XCircle(center=%s, radius=%g)", tostring(self.center), self.radius)
+end
+
+XCircle_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.center == b.center and float_eq(a.radius, b.radius)
+end
+
+function XCircle:contains_point(point)
+    return (point - self.center):length() <= self.radius
+end
+
+function XCircle:intersects_circle(other)
+    return (other.center - self.center):length() <= self.radius + other.radius
+end
+
+function XCircle:distance_to_point(point)
+    return (point - self.center):length() - self.radius
+end
+
+function XCircle:closest_point(point)
+    local d = point - self.center
+    local len = d:length()
+    if len < 1e-12 then
+        return XVec2.new(self.center.x + self.radius, self.center.y)
+    end
+    return self.center + (d * (1 / len)) * self.radius
+end
+
+XRect2D = {}
+XRect2D_mt = {__index = XRect2D}
+
+function XRect2D.new(min, max)
+    if not min then min = XVec2.new(0, 0) end
+    if not max then max = XVec2.new(0, 0) end
+    return setmetatable({min = min, max = max}, XRect2D_mt)
+end
+
+setmetatable(XRect2D, {
+    __call = function(_, min, max)
+        return XRect2D.new(min, max)
+    end
+})
+
+XRect2D_mt.__tostring = function(self)
+    return string.format("XRect2D(min=%s, max=%s)", tostring(self.min), tostring(self.max))
+end
+
+XRect2D_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.min == b.min and a.max == b.max
+end
+
+function XRect2D:contains_point(point)
+    return point.x >= self.min.x and point.x <= self.max.x
+       and point.y >= self.min.y and point.y <= self.max.y
+end
+
+function XRect2D:intersects_rect(other)
+    return self.min.x <= other.max.x and self.max.x >= other.min.x
+       and self.min.y <= other.max.y and self.max.y >= other.min.y
+end
+
+function XRect2D:intersects_circle(circle)
+    local cx = math.max(self.min.x, math.min(circle.center.x, self.max.x))
+    local cy = math.max(self.min.y, math.min(circle.center.y, self.max.y))
+    local dx = cx - circle.center.x
+    local dy = cy - circle.center.y
+    return (dx * dx + dy * dy) <= circle.radius * circle.radius
+end
+
+function XRect2D:distance_to_point(point)
+    local dx = math.max(self.min.x - point.x, 0, point.x - self.max.x)
+    local dy = math.max(self.min.y - point.y, 0, point.y - self.max.y)
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+function XRect2D:get_center()
+    return (self.min + self.max) * 0.5
+end
+
+function XRect2D:get_size()
+    return self.max - self.min
+end
+
+function XRect2D:expand_to_point(point)
+    self.min.x = math.min(self.min.x, point.x)
+    self.min.y = math.min(self.min.y, point.y)
+    self.max.x = math.max(self.max.x, point.x)
+    self.max.y = math.max(self.max.y, point.y)
+end
+
+XSegment2D = {}
+XSegment2D_mt = {__index = XSegment2D}
+
+function XSegment2D.new(start, end_point)
+    return setmetatable({start = start, end_point = end_point}, XSegment2D_mt)
+end
+
+setmetatable(XSegment2D, {
+    __call = function(_, start, end_point)
+        return XSegment2D.new(start, end_point)
+    end
+})
+
+XSegment2D_mt.__tostring = function(self)
+    return string.format("XSegment2D(%s, %s)", tostring(self.start), tostring(self.end_point))
+end
+
+XSegment2D_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.start == b.start and a.end_point == b.end_point
+end
+
+function XSegment2D:length()
+    return (self.end_point - self.start):length()
+end
+
+function XSegment2D:closest_point(point)
+    local cp = closest_point_on_segment(point, self.start, self.end_point)
+    return cp
+end
+
+function XSegment2D:distance_to_point(point)
+    local cp = self:closest_point(point)
+    return (point - cp):length()
+end
+
+function XSegment2D:intersects_segment(other)
+    local d1 = self.end_point - self.start
+    local d2 = other.end_point - other.start
+    local d3 = other.start - self.start
+    local cross_d1_d2 = d1:cross(d2)
+    if math.abs(cross_d1_d2) < 1e-12 then
+        return nil
+    end
+    local t = d3:cross(d2) / cross_d1_d2
+    local u = d3:cross(d1) / cross_d1_d2
+    if t >= 0 and t <= 1 and u >= 0 and u <= 1 then
+        return self.start + t * d1
+    end
+    return nil
+end
+
+function XSegment2D:side(point)
+    local d = self.end_point - self.start
+    local v = point - self.start
+    local cross = d:cross(v)
+    if cross > 1e-9 then
+        return 1
+    elseif cross < -1e-9 then
+        return -1
+    else
+        return 0
+    end
+end
+
+XPolygon2D = {}
+XPolygon2D_mt = {__index = XPolygon2D}
+
+function XPolygon2D.new(vertices)
+    assert(#vertices >= 3, "XPolygon2D requires at least 3 vertices")
+    return setmetatable({vertices = vertices}, XPolygon2D_mt)
+end
+
+setmetatable(XPolygon2D, {
+    __call = function(_, vertices)
+        return XPolygon2D.new(vertices)
+    end
+})
+
+XPolygon2D_mt.__tostring = function(self)
+    local parts = {}
+    for i, v in ipairs(self.vertices) do
+        parts[i] = tostring(v)
+    end
+    return "XPolygon2D(" .. table.concat(parts, ", ") .. ")"
+end
+
+XPolygon2D_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    if #a.vertices ~= #b.vertices then return false end
+    for i = 1, #a.vertices do
+        if a.vertices[i] ~= b.vertices[i] then return false end
+    end
+    return true
+end
+
+function XPolygon2D:contains_point(point)
+    local n = #self.vertices
+    local inside = false
+    local j = n
+    for i = 1, n do
+        local vi = self.vertices[i]
+        local vj = self.vertices[j]
+        if (vi.y > point.y) ~= (vj.y > point.y) and
+           point.x < (vj.x - vi.x) * (point.y - vi.y) / (vj.y - vi.y) + vi.x then
+            inside = not inside
+        end
+        j = i
+    end
+    return inside
+end
+
+function XPolygon2D:area()
+    local n = #self.vertices
+    local a = 0
+    local j = n
+    for i = 1, n do
+        a = a + (self.vertices[j].x * self.vertices[i].y - self.vertices[i].x * self.vertices[j].y)
+        j = i
+    end
+    return a / 2
+end
+
+function XPolygon2D:centroid()
+    local n = #self.vertices
+    local cx, cy = 0, 0
+    local a = 0
+    local j = n
+    for i = 1, n do
+        local vi = self.vertices[i]
+        local vj = self.vertices[j]
+        local cross = vj.x * vi.y - vi.x * vj.y
+        a = a + cross
+        cx = cx + (vj.x + vi.x) * cross
+        cy = cy + (vj.y + vi.y) * cross
+        j = i
+    end
+    a = a / 2
+    local factor = 1 / (6 * a)
+    return XVec2.new(cx * factor, cy * factor)
+end
+
+function XPolygon2D:vertex_count()
+    return #self.vertices
+end
+
+function XPolygon2D:get_edge(i)
+    local n = #self.vertices
+    return self.vertices[i], self.vertices[i % n + 1]
 end
 
 -- Easing functions

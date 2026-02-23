@@ -78,6 +78,8 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `project(onto)`: Returns projection of vector onto another vector
   * `angle_between(other)`: Returns angle in radians between two vectors
   * `is_zero()`: Returns true if all components are within epsilon of zero
+  * `rotate(angle)`: Returns vector rotated by angle (radians) counter-clockwise
+  * `perpendicular()`: Returns perpendicular vector (-y, x)
 
 #### XVec3
 3D vector with x, y, z components.
@@ -386,6 +388,65 @@ RGBA color with HDR support (no clamping), color-space conversions, and blend mo
 - Static methods:
   * `XColor.from_hsv(h, s, v, a)`: Create from HSV (a defaults to 1, h normalized via %360)
   * `XColor.from_hsl(h, s, l, a)`: Create from HSL (a defaults to 1, h normalized via %360)
+
+### 2D Geometry
+
+#### XCircle
+Circle defined by center (XVec2) and radius.
+
+- `XCircle.new(center, radius)` or `XCircle(center, radius)`: Create a new circle (defaults: center=origin, radius=0)
+- Operations:
+  * Equality (`c1 == c2`): Floating-point tolerant comparison
+  * `tostring(c)`: Readable string representation
+- Methods:
+  * `contains_point(point)`: Tests if XVec2 point is inside circle
+  * `intersects_circle(other)`: Tests for intersection with another XCircle
+  * `distance_to_point(point)`: Signed distance to circle perimeter (negative if inside)
+  * `closest_point(point)`: Returns closest XVec2 on perimeter; if point is at center, returns `(center.x + radius, center.y)`
+
+#### XRect2D
+Axis-aligned 2D rectangle defined by min and max XVec2 points.
+
+- `XRect2D.new(min, max)` or `XRect2D(min, max)`: Create a new rectangle (defaults: both origin)
+- Operations:
+  * Equality (`r1 == r2`): Floating-point tolerant comparison
+  * `tostring(r)`: Readable string representation
+- Methods:
+  * `contains_point(point)`: Tests if XVec2 point is inside rectangle
+  * `intersects_rect(other)`: Tests for intersection with another XRect2D
+  * `intersects_circle(circle)`: Tests for intersection with an XCircle
+  * `distance_to_point(point)`: Distance to rectangle boundary (0 if inside)
+  * `get_center()`: Returns center XVec2
+  * `get_size()`: Returns size XVec2 (max - min)
+  * `expand_to_point(point)`: Mutates min/max to contain point
+
+#### XSegment2D
+2D line segment defined by start and end_point (XVec2).
+
+- `XSegment2D.new(start, end_point)` or `XSegment2D(start, end_point)`: Create a new segment
+- Operations:
+  * Equality (`s1 == s2`): Floating-point tolerant comparison
+  * `tostring(s)`: Readable string representation
+- Methods:
+  * `length()`: Returns segment length
+  * `closest_point(point)`: Returns closest XVec2 on segment
+  * `distance_to_point(point)`: Distance from point to nearest point on segment
+  * `intersects_segment(other)`: Returns intersection XVec2 or nil (nil for parallel/collinear)
+  * `side(point)`: Returns 1 (left/CCW), -1 (right/CW), or 0 (on line)
+
+#### XPolygon2D
+2D polygon defined by a table of XVec2 vertices (minimum 3).
+
+- `XPolygon2D.new(vertices)` or `XPolygon2D(vertices)`: Create a new polygon (asserts >= 3 vertices)
+- Operations:
+  * Equality (`p1 == p2`): Vertex-by-vertex comparison
+  * `tostring(p)`: Comma-joined vertex representation
+- Methods:
+  * `contains_point(point)`: Ray-casting point-in-polygon test (works for convex and concave)
+  * `area()`: Signed area via shoelace formula (positive = CCW, negative = CW)
+  * `centroid()`: Returns centroid XVec2 via shoelace-weighted formula
+  * `vertex_count()`: Returns number of vertices
+  * `get_edge(i)`: Returns `vertices[i], vertices[i % n + 1]` (wraps around)
 
 ### Utility Functions
 
