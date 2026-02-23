@@ -359,6 +359,34 @@ View frustum defined by 6 XPlane objects (left, right, bottom, top, near, far) w
 - Static methods:
   * `from_matrix(vp)`: Extracts 6 normalized planes from a view-projection matrix (Gribb-Hartmann method)
 
+### Color
+
+#### XColor
+RGBA color with HDR support (no clamping), color-space conversions, and blend modes.
+
+- `XColor.new(r, g, b, a)` or `XColor(r, g, b, a)`: Create a new color (alpha defaults to 1)
+- Operations:
+  * Addition (`c1 + c2`): Component-wise addition
+  * Subtraction (`c1 - c2`): Component-wise subtraction
+  * Multiplication (`c * scalar`, `scalar * c`, or `c1 * c2`): Scalar or component-wise multiplication
+  * Unary minus (`-c`): Negation
+  * Equality (`c1 == c2`): Floating-point tolerant comparison
+  * `tostring(c)`: Readable string representation
+- Methods:
+  * `lerp(other, t)`: Component-wise linear interpolation
+  * `clamp()`: Clamp all 4 components to [0,1], returns new XColor
+  * `to_hsv()`: Returns h (0-360), s (0-1), v (0-1)
+  * `to_hsl()`: Returns h (0-360), s (0-1), l (0-1)
+  * `to_linear()`: Returns new XColor with sRGB gamma removed (alpha unchanged)
+  * `to_srgb()`: Returns new XColor with sRGB gamma applied (alpha unchanged)
+  * `blend_multiply(other)`: Multiply blend mode, preserves self.a
+  * `blend_screen(other)`: Screen blend mode, preserves self.a
+  * `blend_overlay(other)`: Overlay blend mode, preserves self.a
+  * `blend_add(other)`: Additive blend mode (no clamp), preserves self.a
+- Static methods:
+  * `XColor.from_hsv(h, s, v, a)`: Create from HSV (a defaults to 1, h normalized via %360)
+  * `XColor.from_hsl(h, s, l, a)`: Create from HSL (a defaults to 1, h normalized via %360)
+
 ### Utility Functions
 
 - `XRGB(r, g, b)`: Create an RGB color as XVec3
@@ -366,7 +394,13 @@ View frustum defined by 6 XPlane objects (left, right, bottom, top, near, far) w
 - `XMin(a, b)`: Component-wise minimum of vectors or minimum of scalars
 - `XMax(a, b)`: Component-wise maximum of vectors or maximum of scalars
 - `XClamp(val, min_val, max_val)`: Clamp value(s) between min and max
-- `XLerp(a, b, t)`: Linear interpolation between scalars or vectors (extrapolation supported); dispatches to `slerp` for XQuat
+- `XLerp(a, b, t)`: Linear interpolation between scalars, vectors, or XColor (extrapolation supported); dispatches to `slerp` for XQuat
+- `XEaseIn(t)`: Quadratic ease-in (t^2)
+- `XEaseOut(t)`: Quadratic ease-out
+- `XEaseInOut(t)`: Quadratic ease-in-out
+- `XHermite(p0, m0, p1, m1, t)`: Cubic Hermite interpolation
+- `XSmoothstep(edge0, edge1, x)`: Smoothstep interpolation (3t^2 - 2t^3)
+- `XSmootherstep(edge0, edge1, x)`: Ken Perlin's smootherstep (6t^5 - 15t^4 + 10t^3)
 
 ## License
 

@@ -5,6 +5,18 @@ local function float_eq(a, b)
     return math.abs(a - b) <= EPSILON
 end
 
+local function srgb_to_linear(c)
+    if c < 0 then return -srgb_to_linear(-c) end
+    if c <= 0.04045 then return c / 12.92 end
+    return ((c + 0.055) / 1.055) ^ 2.4
+end
+
+local function linear_to_srgb(c)
+    if c < 0 then return -linear_to_srgb(-c) end
+    if c <= 0.0031308 then return c * 12.92 end
+    return 1.055 * c ^ (1/2.4) - 0.055
+end
+
 local function closest_point_on_segment(p, a, b)
     local ab = b - a
     local len_sq = ab:dot(ab)
@@ -1319,6 +1331,8 @@ function XLerp(a, b, t)
         return a:lerp(b, t)
     elseif getmetatable(a) == XQuat_mt and getmetatable(b) == XQuat_mt then
         return a:slerp(b, t)
+    elseif getmetatable(a) == XColor_mt and getmetatable(b) == XColor_mt then
+        return a:lerp(b, t)
     else
         error("Invalid types for XLerp")
     end
@@ -2181,4 +2195,248 @@ function XFrustum:intersects_box(box)
         end
     end
     return true
+end
+
+-- Color type with RGBA components, HSV/HSL conversion, sRGB gamma, and blend modes
+XColor = {}
+XColor_mt = {__index = XColor}
+
+function XColor.new(r, g, b, a)
+    return setmetatable({r = r or 0, g = g or 0, b = b or 0, a = a or 1}, XColor_mt)
+end
+
+setmetatable(XColor, {
+    __call = function(_, r, g, b, a)
+        return XColor.new(r, g, b, a)
+    end
+})
+
+XColor_mt.__add = function(a, b)
+    return XColor.new(a.r + b.r, a.g + b.g, a.b + b.b, a.a + b.a)
+end
+
+XColor_mt.__sub = function(a, b)
+    return XColor.new(a.r - b.r, a.g - b.g, a.b - b.b, a.a - b.a)
+end
+
+XColor_mt.__mul = function(a, b)
+    if type(a) == "number" then
+        return XColor.new(a * b.r, a * b.g, a * b.b, a * b.a)
+    elseif type(b) == "number" then
+        return XColor.new(a.r * b, a.g * b, a.b * b, a.a * b)
+    else
+        return XColor.new(a.r * b.r, a.g * b.g, a.b * b.b, a.a * b.a)
+    end
+end
+
+XColor_mt.__unm = function(self)
+    return XColor.new(-self.r, -self.g, -self.b, -self.a)
+end
+
+XColor_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return float_eq(a.r, b.r) and float_eq(a.g, b.g) and float_eq(a.b, b.b) and float_eq(a.a, b.a)
+end
+
+XColor_mt.__tostring = function(self)
+    return string.format("XColor(%g, %g, %g, %g)", self.r, self.g, self.b, self.a)
+end
+
+function XColor:lerp(other, t)
+    return XColor.new(
+        self.r + (other.r - self.r) * t,
+        self.g + (other.g - self.g) * t,
+        self.b + (other.b - self.b) * t,
+        self.a + (other.a - self.a) * t
+    )
+end
+
+function XColor:clamp()
+    return XColor.new(
+        math.min(math.max(self.r, 0), 1),
+        math.min(math.max(self.g, 0), 1),
+        math.min(math.max(self.b, 0), 1),
+        math.min(math.max(self.a, 0), 1)
+    )
+end
+
+function XColor:to_hsv()
+    local cmax = math.max(self.r, self.g, self.b)
+    local cmin = math.min(self.r, self.g, self.b)
+    local delta = cmax - cmin
+
+    local h, s, v
+    v = cmax
+
+    if delta < EPSILON then
+        h = 0
+        s = 0
+    else
+        s = delta / cmax
+        if float_eq(cmax, self.r) then
+            h = 60 * (((self.g - self.b) / delta) % 6)
+        elseif float_eq(cmax, self.g) then
+            h = 60 * ((self.b - self.r) / delta + 2)
+        else
+            h = 60 * ((self.r - self.g) / delta + 4)
+        end
+    end
+
+    return h, s, v
+end
+
+function XColor:to_hsl()
+    local cmax = math.max(self.r, self.g, self.b)
+    local cmin = math.min(self.r, self.g, self.b)
+    local delta = cmax - cmin
+
+    local h, s, l
+    l = (cmax + cmin) / 2
+
+    if delta < EPSILON then
+        h = 0
+        s = 0
+    else
+        s = delta / (1 - math.abs(2 * l - 1))
+        if float_eq(cmax, self.r) then
+            h = 60 * (((self.g - self.b) / delta) % 6)
+        elseif float_eq(cmax, self.g) then
+            h = 60 * ((self.b - self.r) / delta + 2)
+        else
+            h = 60 * ((self.r - self.g) / delta + 4)
+        end
+    end
+
+    return h, s, l
+end
+
+function XColor:to_linear()
+    return XColor.new(srgb_to_linear(self.r), srgb_to_linear(self.g), srgb_to_linear(self.b), self.a)
+end
+
+function XColor:to_srgb()
+    return XColor.new(linear_to_srgb(self.r), linear_to_srgb(self.g), linear_to_srgb(self.b), self.a)
+end
+
+function XColor:blend_multiply(other)
+    return XColor.new(self.r * other.r, self.g * other.g, self.b * other.b, self.a)
+end
+
+function XColor:blend_screen(other)
+    return XColor.new(
+        1 - (1 - self.r) * (1 - other.r),
+        1 - (1 - self.g) * (1 - other.g),
+        1 - (1 - self.b) * (1 - other.b),
+        self.a
+    )
+end
+
+function XColor:blend_overlay(other)
+    local function overlay_ch(base, blend)
+        if base < 0.5 then
+            return 2 * base * blend
+        else
+            return 1 - 2 * (1 - base) * (1 - blend)
+        end
+    end
+    return XColor.new(
+        overlay_ch(self.r, other.r),
+        overlay_ch(self.g, other.g),
+        overlay_ch(self.b, other.b),
+        self.a
+    )
+end
+
+function XColor:blend_add(other)
+    return XColor.new(self.r + other.r, self.g + other.g, self.b + other.b, self.a)
+end
+
+function XColor.from_hsv(h, s, v, a)
+    a = a or 1
+    h = h % 360
+    local c = v * s
+    local x = c * (1 - math.abs((h / 60) % 2 - 1))
+    local m = v - c
+    local r, g, b
+    if h < 60 then
+        r, g, b = c, x, 0
+    elseif h < 120 then
+        r, g, b = x, c, 0
+    elseif h < 180 then
+        r, g, b = 0, c, x
+    elseif h < 240 then
+        r, g, b = 0, x, c
+    elseif h < 300 then
+        r, g, b = x, 0, c
+    else
+        r, g, b = c, 0, x
+    end
+    return XColor.new(r + m, g + m, b + m, a)
+end
+
+function XColor.from_hsl(h, s, l, a)
+    a = a or 1
+    h = h % 360
+    local c = (1 - math.abs(2 * l - 1)) * s
+    local x = c * (1 - math.abs((h / 60) % 2 - 1))
+    local m = l - c / 2
+    local r, g, b
+    if h < 60 then
+        r, g, b = c, x, 0
+    elseif h < 120 then
+        r, g, b = x, c, 0
+    elseif h < 180 then
+        r, g, b = 0, c, x
+    elseif h < 240 then
+        r, g, b = 0, x, c
+    elseif h < 300 then
+        r, g, b = x, 0, c
+    else
+        r, g, b = c, 0, x
+    end
+    return XColor.new(r + m, g + m, b + m, a)
+end
+
+-- Easing functions
+function XEaseIn(t)
+    return t * t
+end
+
+function XEaseOut(t)
+    return 1 - (1 - t) * (1 - t)
+end
+
+function XEaseInOut(t)
+    if t < 0.5 then return 2 * t * t end
+    local p = -2 * t + 2
+    return 1 - p * p / 2
+end
+
+-- Cubic Hermite interpolation
+function XHermite(p0, m0, p1, m1, t)
+    local t2 = t * t
+    local t3 = t2 * t
+    local h00 = 2 * t3 - 3 * t2 + 1
+    local h10 = t3 - 2 * t2 + t
+    local h01 = -2 * t3 + 3 * t2
+    local h11 = t3 - t2
+    return h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1
+end
+
+-- Smoothstep interpolation
+function XSmoothstep(edge0, edge1, x)
+    if edge0 >= edge1 then
+        return x < edge0 and 0 or 1
+    end
+    local t = math.min(math.max((x - edge0) / (edge1 - edge0), 0), 1)
+    return t * t * (3 - 2 * t)
+end
+
+-- Smootherstep interpolation (Ken Perlin's improved version)
+function XSmootherstep(edge0, edge1, x)
+    if edge0 >= edge1 then
+        return x < edge0 and 0 or 1
+    end
+    local t = math.min(math.max((x - edge0) / (edge1 - edge0), 0), 1)
+    return t * t * t * (t * (t * 6 - 15) + 10)
 end
