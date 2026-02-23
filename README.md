@@ -120,6 +120,7 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `tostring(m)`: Readable string representation
 - Methods:
   * `inverse()`: Returns inverse matrix
+  * `transpose()`: Returns transposed matrix
 - Static methods:
   * `scale()`: Creates scaling matrix
   * `rotation_x()`: Creates rotation matrix around X axis
@@ -138,6 +139,7 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `tostring(m)`: Readable string representation
 - Methods:
   * `inverse()`: Returns inverse matrix (cofactor expansion, errors on singular)
+  * `decompose()`: Decomposes TRS matrix into translation (XVec3), rotation (XQuat), scale (XVec3)
 - Static methods:
   * `scale()`: Creates scaling matrix
   * `translate()`: Creates translation matrix
@@ -173,6 +175,7 @@ Quaternion with x, y, z, w components (`w=1` identity). Avoids gimbal lock and i
 - Static methods:
   * `from_axis_angle(axis, angle)`: Create from axis (XVec3) and angle (radians)
   * `from_euler(x, y, z)`: Create from Euler angles (Z*Y*X convention, radians)
+  * `from_mat3(mat3)`: Create from rotation XMat3 (Shepperd's method)
 
 ### Geometric Primitives
 
@@ -188,6 +191,7 @@ Ray with origin and direction.
   * `transform(matrix)`: Returns transformed ray
   * `intersectTriangle(v0, v1, v2)`: Möller-Trumbore ray-triangle intersection; returns nearest intersection point (XVec3) or nil
   * `distance_to_point(point)`: Shortest distance from ray to point (clamped to ray origin)
+  * `distance_to_ray(other)`: Closest distance between two rays (clamped to t >= 0 for both)
 
 #### XPlane
 Plane defined by normal and distance.
@@ -240,6 +244,82 @@ Axis-aligned bounding box defined by min and max points.
   * `get_size()`: Returns size of box
 - Static methods:
   * `merge(box1, box2)`: Creates box containing both input boxes
+
+#### XTriangle
+Triangle defined by three XVec3 vertices.
+
+- `XTriangle.new(v0, v1, v2)` or `XTriangle(v0, v1, v2)`: Create a new triangle
+- Operations:
+  * Equality (`t1 == t2`): Floating-point tolerant comparison
+  * `tostring(t)`: Readable string representation
+- Methods:
+  * `normal()`: Returns unit face normal
+  * `area()`: Returns triangle area
+  * `centroid()`: Returns centroid `(v0+v1+v2) * (1/3)`
+  * `get_barycentric(p)`: Returns barycentric coordinates u, v, w
+  * `contains_point(p)`: Tests if point lies on triangle (via barycentric)
+  * `intersectRay(ray)`: Returns intersection point (XVec3) or nil
+  * `distance_to_point(p)`: Closest distance from point to triangle
+
+#### XCapsule
+Line segment with radius (Minkowski sum of segment and sphere).
+
+- `XCapsule.new(start, end_point, radius)` or `XCapsule(start, end_point, radius)`: Create a new capsule
+- Operations:
+  * Equality (`c1 == c2`): Floating-point tolerant comparison
+  * `tostring(c)`: Readable string representation
+- Methods:
+  * `get_center()`: Returns midpoint of segment
+  * `get_length()`: Returns segment length
+  * `contains_point(p)`: Tests if point is within capsule (distance to segment <= radius)
+  * `distance_to_point(p)`: Signed distance to capsule surface
+  * `intersectRay(ray)`: Returns nearest intersection point (XVec3) or nil (cylinder body + hemisphere caps)
+  * `intersects_sphere(sphere)`: Tests for intersection with XBoundingSphere
+  * `intersects_capsule(other)`: Tests for intersection with another XCapsule
+
+#### XOBB
+Oriented bounding box with center, half-extents, and orientation (XMat3).
+
+- `XOBB.new(center, half_extents, orientation)` or `XOBB(center, half_extents, orientation)`: Create a new OBB
+- Operations:
+  * Equality (`o1 == o2`): Floating-point tolerant comparison
+  * `tostring(o)`: Readable string representation
+- Methods:
+  * `contains_point(p)`: Tests if point is inside OBB
+  * `get_corners()`: Returns table of 8 corner XVec3 positions
+  * `intersectRay(ray)`: Returns nearest intersection point (XVec3) or nil (slab method in local space)
+  * `intersects_aabb(aabb)`: Tests for intersection with XAABox (SAT, 15 axes)
+  * `intersects_box(other)`: Tests for OBB-OBB intersection (SAT, 15 axes)
+  * `distance_to_point(p)`: Distance from point to OBB surface (0 if inside)
+- Static methods:
+  * `from_quat(center, half_extents, quat)`: Create from XQuat orientation
+
+### Splines
+
+#### XBezier3
+Cubic Bézier curve defined by 4 XVec3 control points.
+
+- `XBezier3.new(p0, p1, p2, p3)` or `XBezier3(p0, p1, p2, p3)`: Create a new cubic Bézier
+- Operations:
+  * Equality (`b1 == b2`): Floating-point tolerant comparison
+  * `tostring(b)`: Readable string representation
+- Methods:
+  * `evaluate(t)`: Returns point on curve at parameter t
+  * `tangent(t)`: Returns tangent vector at parameter t
+  * `split(t)`: Returns two XBezier3 curves from De Casteljau subdivision
+  * `length(subdivisions)`: Approximate arc length (default 64 subdivisions)
+
+#### XCatmullRom
+Catmull-Rom spline defined by 4 XVec3 control points. Passes through p1 at t=0 and p2 at t=1.
+
+- `XCatmullRom.new(p0, p1, p2, p3)` or `XCatmullRom(p0, p1, p2, p3)`: Create a new Catmull-Rom spline
+- Operations:
+  * Equality (`c1 == c2`): Floating-point tolerant comparison
+  * `tostring(c)`: Readable string representation
+- Methods:
+  * `evaluate(t)`: Returns point on curve at parameter t
+  * `tangent(t)`: Returns tangent vector at parameter t
+  * `length(subdivisions)`: Approximate arc length (default 64 subdivisions)
 
 #### XFrustum
 View frustum defined by 6 XPlane objects (left, right, bottom, top, near, far) with inward-facing normals.

@@ -5,6 +5,57 @@ local function float_eq(a, b)
     return math.abs(a - b) <= EPSILON
 end
 
+local function closest_point_on_segment(p, a, b)
+    local ab = b - a
+    local len_sq = ab:dot(ab)
+    if len_sq < 1e-12 then return a, 0 end
+    local t = (p - a):dot(ab) / len_sq
+    t = math.max(0, math.min(1, t))
+    return a + t * ab, t
+end
+
+local function closest_dist_segments(p1, q1, p2, q2)
+    local d1 = q1 - p1
+    local d2 = q2 - p2
+    local r = p1 - p2
+    local a = d1:dot(d1)
+    local e = d2:dot(d2)
+    local f = d2:dot(r)
+    if a < 1e-12 and e < 1e-12 then
+        return (p1 - p2):length()
+    end
+    local s, t
+    if a < 1e-12 then
+        s = 0
+        t = math.max(0, math.min(f / e, 1))
+    else
+        local c = d1:dot(r)
+        if e < 1e-12 then
+            t = 0
+            s = math.max(0, math.min(-c / a, 1))
+        else
+            local b = d1:dot(d2)
+            local denom = a * e - b * b
+            if math.abs(denom) > 1e-12 then
+                s = math.max(0, math.min((b * f - c * e) / denom, 1))
+            else
+                s = 0
+            end
+            t = (b * s + f) / e
+            if t < 0 then
+                t = 0
+                s = math.max(0, math.min(-c / a, 1))
+            elseif t > 1 then
+                t = 1
+                s = math.max(0, math.min((b - c) / a, 1))
+            end
+        end
+    end
+    local c1 = p1 + s * d1
+    local c2 = p2 + t * d2
+    return (c1 - c2):length()
+end
+
 XVec2 = {}
 XVec2_mt = {__index = XVec2}
 
@@ -308,6 +359,15 @@ function XMat3:inverse()
         (a[1] * a[5] - a[2] * a[4]) * invdet
     )
 end
+
+function XMat3:transpose()
+    return XMat3.new(
+        self[1], self[4], self[7],
+        self[2], self[5], self[8],
+        self[3], self[6], self[9]
+    )
+end
+
 -- Creates a scale matrix
 function XMat3.scale(x, y, z)
 	return XMat3.new(
@@ -642,6 +702,36 @@ function XMat4:inverse()
     )
 end
 
+function XMat4:decompose()
+    local tx, ty, tz = self[4], self[8], self[12]
+    local translation = XVec3.new(tx, ty, tz)
+
+    local c0 = XVec3.new(self[1], self[5], self[9])
+    local c1 = XVec3.new(self[2], self[6], self[10])
+    local c2 = XVec3.new(self[3], self[7], self[11])
+
+    local sx = c0:length()
+    local sy = c1:length()
+    local sz = c2:length()
+
+    local det = c0:dot(c1:cross(c2))
+    if det < 0 then
+        sx = -sx
+    end
+
+    local scale = XVec3.new(sx, sy, sz)
+
+    local rot = XMat3.new(
+        c0.x / sx, c1.x / sy, c2.x / sz,
+        c0.y / sx, c1.y / sy, c2.y / sz,
+        c0.z / sx, c1.z / sy, c2.z / sz
+    )
+
+    local rotation = XQuat.from_mat3(rot)
+
+    return translation, rotation, scale
+end
+
 XQuat = {}
 XQuat_mt = {__index = XQuat}
 
@@ -790,6 +880,37 @@ function XQuat.from_euler(x, y, z)
     return qz * qy * qx
 end
 
+function XQuat.from_mat3(m)
+    local trace = m[1] + m[5] + m[9]
+    local x, y, z, w
+    if trace > 0 then
+        local s = math.sqrt(trace + 1) * 2
+        w = s / 4
+        x = (m[8] - m[6]) / s
+        y = (m[3] - m[7]) / s
+        z = (m[4] - m[2]) / s
+    elseif m[1] > m[5] and m[1] > m[9] then
+        local s = math.sqrt(1 + m[1] - m[5] - m[9]) * 2
+        w = (m[8] - m[6]) / s
+        x = s / 4
+        y = (m[2] + m[4]) / s
+        z = (m[3] + m[7]) / s
+    elseif m[5] > m[9] then
+        local s = math.sqrt(1 + m[5] - m[1] - m[9]) * 2
+        w = (m[3] - m[7]) / s
+        x = (m[2] + m[4]) / s
+        y = s / 4
+        z = (m[6] + m[8]) / s
+    else
+        local s = math.sqrt(1 + m[9] - m[1] - m[5]) * 2
+        w = (m[4] - m[2]) / s
+        x = (m[3] + m[7]) / s
+        y = (m[6] + m[8]) / s
+        z = s / 4
+    end
+    return XQuat.new(x, y, z, w)
+end
+
 XPlane = {}
 XPlane_mt = {__index = XPlane}
 
@@ -901,6 +1022,38 @@ function XRay:distance_to_point(point)
     if t < 0 then t = 0 end
     local closest = self:pointAt(t)
     return (point - closest):length()
+end
+
+function XRay:distance_to_ray(other)
+    local d1 = self.direction
+    local d2 = other.direction
+    local r = self.origin - other.origin
+    local a = d1:dot(d1)
+    local b = d1:dot(d2)
+    local c = d2:dot(d2)
+    local d = d1:dot(r)
+    local e = d2:dot(r)
+    local denom = a * c - b * b
+    local s, t
+    if math.abs(denom) < 1e-12 then
+        s = 0
+        t = e / c
+    else
+        s = (b * e - c * d) / denom
+        t = (a * e - b * d) / denom
+    end
+    if s < 0 then
+        s = 0
+        t = e / c
+    end
+    if t < 0 then
+        t = 0
+        s = -d / a
+        if s < 0 then s = 0 end
+    end
+    local closest1 = self.origin + s * d1
+    local closest2 = other.origin + t * d2
+    return (closest1 - closest2):length()
 end
 
 function XMin(a, b)
@@ -1232,6 +1385,519 @@ end
 -- Gets the size/extents of the box
 function XAABox:get_size()
 	return self.max - self.min
+end
+
+XTriangle = {}
+XTriangle_mt = {__index = XTriangle}
+
+function XTriangle.new(v0, v1, v2)
+    return setmetatable({v0 = v0, v1 = v1, v2 = v2}, XTriangle_mt)
+end
+
+setmetatable(XTriangle, {
+    __call = function(_, v0, v1, v2)
+        return XTriangle.new(v0, v1, v2)
+    end
+})
+
+XTriangle_mt.__tostring = function(self)
+    return string.format("XTriangle(%s, %s, %s)", tostring(self.v0), tostring(self.v1), tostring(self.v2))
+end
+
+XTriangle_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.v0 == b.v0 and a.v1 == b.v1 and a.v2 == b.v2
+end
+
+function XTriangle:normal()
+    local e1 = self.v1 - self.v0
+    local e2 = self.v2 - self.v0
+    return e1:cross(e2):normalize()
+end
+
+function XTriangle:area()
+    local e1 = self.v1 - self.v0
+    local e2 = self.v2 - self.v0
+    return e1:cross(e2):length() * 0.5
+end
+
+function XTriangle:centroid()
+    return (self.v0 + self.v1 + self.v2) * (1/3)
+end
+
+function XTriangle:get_barycentric(p)
+    local v0 = self.v1 - self.v0
+    local v1 = self.v2 - self.v0
+    local v2 = p - self.v0
+    local d00 = v0:dot(v0)
+    local d01 = v0:dot(v1)
+    local d11 = v1:dot(v1)
+    local d20 = v2:dot(v0)
+    local d21 = v2:dot(v1)
+    local denom = d00 * d11 - d01 * d01
+    if math.abs(denom) < 1e-12 then
+        return 1, 0, 0
+    end
+    local v = (d11 * d20 - d01 * d21) / denom
+    local w = (d00 * d21 - d01 * d20) / denom
+    local u = 1 - v - w
+    return u, v, w
+end
+
+function XTriangle:contains_point(p)
+    local u, v, w = self:get_barycentric(p)
+    return u >= -1e-9 and v >= -1e-9 and w >= -1e-9
+end
+
+function XTriangle:intersectRay(ray)
+    return ray:intersectTriangle(self.v0, self.v1, self.v2)
+end
+
+function XTriangle:distance_to_point(p)
+    local n = self:normal()
+    local dist_to_plane = n:dot(p - self.v0)
+    local projected = p - dist_to_plane * n
+
+    if self:contains_point(projected) then
+        return math.abs(dist_to_plane)
+    end
+
+    local cp0 = closest_point_on_segment(p, self.v0, self.v1)
+    local cp1 = closest_point_on_segment(p, self.v1, self.v2)
+    local cp2 = closest_point_on_segment(p, self.v2, self.v0)
+
+    local d0 = (p - cp0):length()
+    local d1 = (p - cp1):length()
+    local d2 = (p - cp2):length()
+
+    return math.min(d0, d1, d2)
+end
+
+XCapsule = {}
+XCapsule_mt = {__index = XCapsule}
+
+function XCapsule.new(start, end_point, radius)
+    return setmetatable({start = start, end_point = end_point, radius = radius or 0}, XCapsule_mt)
+end
+
+setmetatable(XCapsule, {
+    __call = function(_, start, end_point, radius)
+        return XCapsule.new(start, end_point, radius)
+    end
+})
+
+XCapsule_mt.__tostring = function(self)
+    return string.format("XCapsule(%s, %s, %g)", tostring(self.start), tostring(self.end_point), self.radius)
+end
+
+XCapsule_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.start == b.start and a.end_point == b.end_point and float_eq(a.radius, b.radius)
+end
+
+function XCapsule:get_center()
+    return (self.start + self.end_point) * 0.5
+end
+
+function XCapsule:get_length()
+    return (self.end_point - self.start):length()
+end
+
+function XCapsule:contains_point(p)
+    local cp = closest_point_on_segment(p, self.start, self.end_point)
+    return (p - cp):length() <= self.radius + 1e-9
+end
+
+function XCapsule:distance_to_point(p)
+    local cp = closest_point_on_segment(p, self.start, self.end_point)
+    return (p - cp):length() - self.radius
+end
+
+function XCapsule:intersectRay(ray)
+    local ab = self.end_point - self.start
+    local ao = ray.origin - self.start
+    local ab_dot_ab = ab:dot(ab)
+    local best_t = math.huge
+
+    if ab_dot_ab > 1e-12 then
+        local ab_dot_d = ab:dot(ray.direction)
+        local ab_dot_ao = ab:dot(ao)
+        local m = ab_dot_d / ab_dot_ab
+        local n = ab_dot_ao / ab_dot_ab
+        local d_perp = ray.direction - m * ab
+        local o_perp = ao - n * ab
+        local a = d_perp:dot(d_perp)
+        local b = 2 * d_perp:dot(o_perp)
+        local c = o_perp:dot(o_perp) - self.radius * self.radius
+        local disc = b * b - 4 * a * c
+        if disc >= 0 and a > 1e-12 then
+            local sqrt_disc = math.sqrt(disc)
+            for _, sign in ipairs({-1, 1}) do
+                local t = (-b + sign * sqrt_disc) / (2 * a)
+                if t >= 0 and t < best_t then
+                    local s = m * t + n
+                    if s >= 0 and s <= 1 then
+                        best_t = t
+                    end
+                end
+            end
+        end
+    end
+
+    for i, cap_center in ipairs({self.start, self.end_point}) do
+        local oc = ray.origin - cap_center
+        local a2 = ray.direction:dot(ray.direction)
+        local b2 = 2 * oc:dot(ray.direction)
+        local c2 = oc:dot(oc) - self.radius * self.radius
+        local disc2 = b2 * b2 - 4 * a2 * c2
+        if disc2 >= 0 then
+            local sqrt_disc2 = math.sqrt(disc2)
+            for _, sign in ipairs({-1, 1}) do
+                local t = (-b2 + sign * sqrt_disc2) / (2 * a2)
+                if t >= 0 and t < best_t then
+                    local hit = ray:pointAt(t)
+                    local proj = (hit - cap_center):dot(ab)
+                    if (i == 1 and proj <= 0) or (i == 2 and proj >= 0) then
+                        best_t = t
+                    end
+                end
+            end
+        end
+    end
+
+    if best_t < math.huge then
+        return ray:pointAt(best_t)
+    end
+    return nil
+end
+
+function XCapsule:intersects_sphere(sphere)
+    local cp = closest_point_on_segment(sphere.center, self.start, self.end_point)
+    return (sphere.center - cp):length() <= self.radius + sphere.radius
+end
+
+function XCapsule:intersects_capsule(other)
+    local d = closest_dist_segments(self.start, self.end_point, other.start, other.end_point)
+    return d <= self.radius + other.radius
+end
+
+XOBB = {}
+XOBB_mt = {__index = XOBB}
+
+function XOBB.new(center, half_extents, orientation)
+    return setmetatable({
+        center = center,
+        half_extents = half_extents,
+        orientation = orientation or XMat3.new()
+    }, XOBB_mt)
+end
+
+function XOBB.from_quat(center, half_extents, quat)
+    return XOBB.new(center, half_extents, quat:to_mat3())
+end
+
+setmetatable(XOBB, {
+    __call = function(_, center, half_extents, orientation)
+        return XOBB.new(center, half_extents, orientation)
+    end
+})
+
+XOBB_mt.__tostring = function(self)
+    return string.format("XOBB(center=%s, half_extents=%s, orientation=%s)",
+        tostring(self.center), tostring(self.half_extents), tostring(self.orientation))
+end
+
+XOBB_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.center == b.center and a.half_extents == b.half_extents and a.orientation == b.orientation
+end
+
+function XOBB:contains_point(p)
+    local d = p - self.center
+    local m = self.orientation
+    local lx = m[1] * d.x + m[4] * d.y + m[7] * d.z
+    local ly = m[2] * d.x + m[5] * d.y + m[8] * d.z
+    local lz = m[3] * d.x + m[6] * d.y + m[9] * d.z
+    return math.abs(lx) <= self.half_extents.x + 1e-9
+       and math.abs(ly) <= self.half_extents.y + 1e-9
+       and math.abs(lz) <= self.half_extents.z + 1e-9
+end
+
+function XOBB:get_corners()
+    local m = self.orientation
+    local h = self.half_extents
+    local ax0 = XVec3.new(m[1], m[4], m[7]) * h.x
+    local ax1 = XVec3.new(m[2], m[5], m[8]) * h.y
+    local ax2 = XVec3.new(m[3], m[6], m[9]) * h.z
+    local c = self.center
+    local corners = {}
+    for i = 0, 7 do
+        local sx = (i % 2 == 0) and 1 or -1
+        local sy = (math.floor(i / 2) % 2 == 0) and 1 or -1
+        local sz = (math.floor(i / 4) % 2 == 0) and 1 or -1
+        corners[i + 1] = c + sx * ax0 + sy * ax1 + sz * ax2
+    end
+    return corners
+end
+
+function XOBB:intersectRay(ray)
+    local m = self.orientation
+    local d = ray.origin - self.center
+    local local_origin = XVec3.new(
+        m[1] * d.x + m[4] * d.y + m[7] * d.z,
+        m[2] * d.x + m[5] * d.y + m[8] * d.z,
+        m[3] * d.x + m[6] * d.y + m[9] * d.z
+    )
+    local rd = ray.direction
+    local local_dir = XVec3.new(
+        m[1] * rd.x + m[4] * rd.y + m[7] * rd.z,
+        m[2] * rd.x + m[5] * rd.y + m[8] * rd.z,
+        m[3] * rd.x + m[6] * rd.y + m[9] * rd.z
+    )
+
+    local tmin = -math.huge
+    local tmax = math.huge
+    local h = {self.half_extents.x, self.half_extents.y, self.half_extents.z}
+    local o = {local_origin.x, local_origin.y, local_origin.z}
+    local dir = {local_dir.x, local_dir.y, local_dir.z}
+
+    for i = 1, 3 do
+        if math.abs(dir[i]) < 1e-12 then
+            if o[i] < -h[i] or o[i] > h[i] then return nil end
+        else
+            local t1 = (-h[i] - o[i]) / dir[i]
+            local t2 = (h[i] - o[i]) / dir[i]
+            if t1 > t2 then t1, t2 = t2, t1 end
+            if t1 > tmin then tmin = t1 end
+            if t2 < tmax then tmax = t2 end
+            if tmin > tmax then return nil end
+        end
+    end
+
+    if tmax < 0 then return nil end
+    local t = tmin >= 0 and tmin or tmax
+    return ray:pointAt(t)
+end
+
+function XOBB:intersects_aabb(aabb)
+    local aabb_center = (aabb.min + aabb.max) * 0.5
+    local aabb_half = (aabb.max - aabb.min) * 0.5
+    local aabb_axes = {XVec3.new(1,0,0), XVec3.new(0,1,0), XVec3.new(0,0,1)}
+
+    local m = self.orientation
+    local obb_axes = {
+        XVec3.new(m[1], m[4], m[7]),
+        XVec3.new(m[2], m[5], m[8]),
+        XVec3.new(m[3], m[6], m[9])
+    }
+    local obb_half = {self.half_extents.x, self.half_extents.y, self.half_extents.z}
+    local aabb_h = {aabb_half.x, aabb_half.y, aabb_half.z}
+
+    local d = aabb_center - self.center
+
+    local function test_axis(axis)
+        local len = axis:length()
+        if len < 1e-9 then return true end
+        axis = axis * (1 / len)
+        local proj_d = math.abs(d:dot(axis))
+        local proj_a = 0
+        for i = 1, 3 do
+            proj_a = proj_a + math.abs(obb_axes[i]:dot(axis)) * obb_half[i]
+        end
+        local proj_b = 0
+        for i = 1, 3 do
+            proj_b = proj_b + math.abs(aabb_axes[i]:dot(axis)) * aabb_h[i]
+        end
+        return proj_d <= proj_a + proj_b
+    end
+
+    for i = 1, 3 do
+        if not test_axis(obb_axes[i]) then return false end
+    end
+    for i = 1, 3 do
+        if not test_axis(aabb_axes[i]) then return false end
+    end
+    for i = 1, 3 do
+        for j = 1, 3 do
+            if not test_axis(obb_axes[i]:cross(aabb_axes[j])) then return false end
+        end
+    end
+    return true
+end
+
+function XOBB:intersects_box(other)
+    local m_a = self.orientation
+    local m_b = other.orientation
+    local axes_a = {
+        XVec3.new(m_a[1], m_a[4], m_a[7]),
+        XVec3.new(m_a[2], m_a[5], m_a[8]),
+        XVec3.new(m_a[3], m_a[6], m_a[9])
+    }
+    local axes_b = {
+        XVec3.new(m_b[1], m_b[4], m_b[7]),
+        XVec3.new(m_b[2], m_b[5], m_b[8]),
+        XVec3.new(m_b[3], m_b[6], m_b[9])
+    }
+    local ha = {self.half_extents.x, self.half_extents.y, self.half_extents.z}
+    local hb = {other.half_extents.x, other.half_extents.y, other.half_extents.z}
+
+    local d = other.center - self.center
+
+    local function test_axis(axis)
+        local len = axis:length()
+        if len < 1e-9 then return true end
+        axis = axis * (1 / len)
+        local proj_d = math.abs(d:dot(axis))
+        local proj_a = 0
+        for i = 1, 3 do
+            proj_a = proj_a + math.abs(axes_a[i]:dot(axis)) * ha[i]
+        end
+        local proj_b = 0
+        for i = 1, 3 do
+            proj_b = proj_b + math.abs(axes_b[i]:dot(axis)) * hb[i]
+        end
+        return proj_d <= proj_a + proj_b
+    end
+
+    for i = 1, 3 do
+        if not test_axis(axes_a[i]) then return false end
+    end
+    for i = 1, 3 do
+        if not test_axis(axes_b[i]) then return false end
+    end
+    for i = 1, 3 do
+        for j = 1, 3 do
+            if not test_axis(axes_a[i]:cross(axes_b[j])) then return false end
+        end
+    end
+    return true
+end
+
+function XOBB:distance_to_point(p)
+    local d = p - self.center
+    local m = self.orientation
+    local lx = m[1] * d.x + m[4] * d.y + m[7] * d.z
+    local ly = m[2] * d.x + m[5] * d.y + m[8] * d.z
+    local lz = m[3] * d.x + m[6] * d.y + m[9] * d.z
+    local dx = math.max(math.abs(lx) - self.half_extents.x, 0)
+    local dy = math.max(math.abs(ly) - self.half_extents.y, 0)
+    local dz = math.max(math.abs(lz) - self.half_extents.z, 0)
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+
+XBezier3 = {}
+XBezier3_mt = {__index = XBezier3}
+
+function XBezier3.new(p0, p1, p2, p3)
+    return setmetatable({p0 = p0, p1 = p1, p2 = p2, p3 = p3}, XBezier3_mt)
+end
+
+setmetatable(XBezier3, {
+    __call = function(_, p0, p1, p2, p3)
+        return XBezier3.new(p0, p1, p2, p3)
+    end
+})
+
+XBezier3_mt.__tostring = function(self)
+    return string.format("XBezier3(%s, %s, %s, %s)",
+        tostring(self.p0), tostring(self.p1), tostring(self.p2), tostring(self.p3))
+end
+
+XBezier3_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.p0 == b.p0 and a.p1 == b.p1 and a.p2 == b.p2 and a.p3 == b.p3
+end
+
+function XBezier3:evaluate(t)
+    local u = 1 - t
+    local uu = u * u
+    local tt = t * t
+    return uu * u * self.p0 + 3 * uu * t * self.p1 + 3 * u * tt * self.p2 + tt * t * self.p3
+end
+
+function XBezier3:tangent(t)
+    local u = 1 - t
+    return 3 * u * u * (self.p1 - self.p0) + 6 * u * t * (self.p2 - self.p1) + 3 * t * t * (self.p3 - self.p2)
+end
+
+function XBezier3:split(t)
+    local p01 = self.p0:lerp(self.p1, t)
+    local p12 = self.p1:lerp(self.p2, t)
+    local p23 = self.p2:lerp(self.p3, t)
+    local p012 = p01:lerp(p12, t)
+    local p123 = p12:lerp(p23, t)
+    local p0123 = p012:lerp(p123, t)
+    return XBezier3.new(self.p0, p01, p012, p0123),
+           XBezier3.new(p0123, p123, p23, self.p3)
+end
+
+function XBezier3:length(subdivisions)
+    subdivisions = subdivisions or 64
+    local total = 0
+    local prev = self:evaluate(0)
+    for i = 1, subdivisions do
+        local t = i / subdivisions
+        local curr = self:evaluate(t)
+        total = total + (curr - prev):length()
+        prev = curr
+    end
+    return total
+end
+
+XCatmullRom = {}
+XCatmullRom_mt = {__index = XCatmullRom}
+
+function XCatmullRom.new(p0, p1, p2, p3)
+    return setmetatable({p0 = p0, p1 = p1, p2 = p2, p3 = p3}, XCatmullRom_mt)
+end
+
+setmetatable(XCatmullRom, {
+    __call = function(_, p0, p1, p2, p3)
+        return XCatmullRom.new(p0, p1, p2, p3)
+    end
+})
+
+XCatmullRom_mt.__tostring = function(self)
+    return string.format("XCatmullRom(%s, %s, %s, %s)",
+        tostring(self.p0), tostring(self.p1), tostring(self.p2), tostring(self.p3))
+end
+
+XCatmullRom_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.p0 == b.p0 and a.p1 == b.p1 and a.p2 == b.p2 and a.p3 == b.p3
+end
+
+function XCatmullRom:evaluate(t)
+    local t2 = t * t
+    local t3 = t2 * t
+    return 0.5 * (
+        (2 * self.p1) +
+        (-self.p0 + self.p2) * t +
+        (2 * self.p0 - 5 * self.p1 + 4 * self.p2 - self.p3) * t2 +
+        (-self.p0 + 3 * self.p1 - 3 * self.p2 + self.p3) * t3
+    )
+end
+
+function XCatmullRom:tangent(t)
+    local t2 = t * t
+    return 0.5 * (
+        (-self.p0 + self.p2) +
+        (4 * self.p0 - 10 * self.p1 + 8 * self.p2 - 2 * self.p3) * t +
+        (-3 * self.p0 + 9 * self.p1 - 9 * self.p2 + 3 * self.p3) * t2
+    )
+end
+
+function XCatmullRom:length(subdivisions)
+    subdivisions = subdivisions or 64
+    local total = 0
+    local prev = self:evaluate(0)
+    for i = 1, subdivisions do
+        local t = i / subdivisions
+        local curr = self:evaluate(t)
+        total = total + (curr - prev):length()
+        prev = curr
+    end
+    return total
 end
 
 XFrustum = {}

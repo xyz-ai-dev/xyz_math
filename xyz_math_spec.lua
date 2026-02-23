@@ -1649,3 +1649,556 @@ describe("XAABox:distance_to_point", function()
 		assert.are.near(math.sqrt(3), d, 1e-6)
 	end)
 end)
+
+describe("XMat3:transpose", function()
+	it("should transpose identity to identity", function()
+		local m = XMat3.new()
+		assert.is_true(m:transpose() == XMat3.new())
+	end)
+
+	it("should swap off-diagonal elements", function()
+		local m = XMat3.new(1, 2, 3, 4, 5, 6, 7, 8, 9)
+		local t = m:transpose()
+		assert.is_true(t == XMat3.new(1, 4, 7, 2, 5, 8, 3, 6, 9))
+	end)
+
+	it("should satisfy M * M^T = I for orthonormal rotation", function()
+		local m = XMat3.rotation_y(math.pi / 3)
+		local product = m * m:transpose()
+		assert.is_true(product == XMat3.new())
+	end)
+end)
+
+describe("XQuat.from_mat3", function()
+	it("should roundtrip identity", function()
+		local q = XQuat()
+		local m = q:to_mat3()
+		local q2 = XQuat.from_mat3(m)
+		assert.is_true(q == q2)
+	end)
+
+	it("should roundtrip 90 deg Y rotation", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 2)
+		local m = q:to_mat3()
+		local q2 = XQuat.from_mat3(m)
+		assert.is_true(q == q2)
+	end)
+
+	it("should roundtrip 180 deg Z rotation", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 0, 1), math.pi)
+		local m = q:to_mat3()
+		local q2 = XQuat.from_mat3(m)
+		-- q and -q represent same rotation
+		local same = (q == q2) or (-q == q2)
+		assert.is_true(same)
+	end)
+
+	it("should roundtrip arbitrary rotation", function()
+		local axis = XVec3(1, 2, 3):normalize()
+		local q = XQuat.from_axis_angle(axis, 1.23)
+		local m = q:to_mat3()
+		local q2 = XQuat.from_mat3(m)
+		assert.is_true(q == q2)
+	end)
+
+	it("should produce unit quaternion", function()
+		local m = XMat3.rotation_x(0.7)
+		local q = XQuat.from_mat3(m)
+		assert.are.near(1, q:length(), 1e-9)
+	end)
+end)
+
+describe("XMat4:decompose", function()
+	it("should decompose identity matrix", function()
+		local t, r, s = XMat4.new():decompose()
+		assert.is_true(t == XVec3(0, 0, 0))
+		assert.is_true(s == XVec3(1, 1, 1))
+		assert.is_true(r == XQuat())
+	end)
+
+	it("should decompose pure translation", function()
+		local m = XMat4.translate(3, 4, 5)
+		local t, r, s = m:decompose()
+		assert.is_true(t == XVec3(3, 4, 5))
+		assert.is_true(s == XVec3(1, 1, 1))
+		assert.is_true(r == XQuat())
+	end)
+
+	it("should decompose pure scale", function()
+		local m = XMat4.scale(2, 3, 4)
+		local t, r, s = m:decompose()
+		assert.is_true(t == XVec3(0, 0, 0))
+		assert.is_true(s == XVec3(2, 3, 4))
+	end)
+
+	it("should decompose pure rotation", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 4)
+		local m = q:to_mat4()
+		local t, r, s = m:decompose()
+		assert.is_true(t == XVec3(0, 0, 0))
+		assert.is_true(s == XVec3(1, 1, 1))
+		assert.is_true(r == q)
+	end)
+
+	it("should decompose TRS and roundtrip", function()
+		local T = XMat4.translate(1, 2, 3)
+		local q = XQuat.from_euler(0.3, 0.5, 0.7)
+		local R = q:to_mat4()
+		local S = XMat4.scale(2, 3, 4)
+		local original = T * R * S
+		local t, r, s = original:decompose()
+		-- Recompose
+		local recomposed = XMat4.translate(t.x, t.y, t.z) * r:to_mat4() * XMat4.scale(s.x, s.y, s.z)
+		assert.is_true(original == recomposed)
+	end)
+
+	it("should decompose uniform scale TRS", function()
+		local T = XMat4.translate(5, 10, 15)
+		local q = XQuat.from_axis_angle(XVec3(1, 0, 0), 1.0)
+		local R = q:to_mat4()
+		local S = XMat4.scale(3, 3, 3)
+		local original = T * R * S
+		local t, r, s = original:decompose()
+		assert.is_true(t == XVec3(5, 10, 15))
+		assert.is_true(s == XVec3(3, 3, 3))
+		assert.is_true(r == q)
+	end)
+
+	it("should handle negative determinant (reflection)", function()
+		local m = XMat4.scale(-2, 3, 4)
+		local t, r, s = m:decompose()
+		assert.is_true(t == XVec3(0, 0, 0))
+		assert.are.near(-2, s.x, 1e-6)
+		assert.are.near(3, s.y, 1e-6)
+		assert.are.near(4, s.z, 1e-6)
+	end)
+
+	it("should decompose rotation matching quat roundtrip", function()
+		local q = XQuat.from_euler(0.1, 0.2, 0.3)
+		local m = q:to_mat4()
+		local _, r, _ = m:decompose()
+		-- Verify rotation matches by applying to a test vector
+		local v = XVec3(1, 2, 3)
+		local v1 = q * v
+		local v2 = r * v
+		assert.are.near(v1.x, v2.x, 1e-6)
+		assert.are.near(v1.y, v2.y, 1e-6)
+		assert.are.near(v1.z, v2.z, 1e-6)
+	end)
+end)
+
+describe("XTriangle", function()
+	local tri
+	setup(function()
+		tri = XTriangle(XVec3(0, 0, 0), XVec3(4, 0, 0), XVec3(0, 4, 0))
+	end)
+
+	it("should create with callable syntax", function()
+		assert.is_truthy(tri)
+		assert.is_true(tri.v0 == XVec3(0, 0, 0))
+	end)
+
+	it("should format __tostring", function()
+		local s = tostring(tri)
+		assert.is_truthy(string.find(s, "XTriangle"))
+	end)
+
+	it("should compare equal triangles", function()
+		local tri2 = XTriangle(XVec3(0, 0, 0), XVec3(4, 0, 0), XVec3(0, 4, 0))
+		assert.is_true(tri == tri2)
+	end)
+
+	it("should compute normal", function()
+		local n = tri:normal()
+		assert.are.near(0, n.x, 1e-6)
+		assert.are.near(0, n.y, 1e-6)
+		assert.are.near(1, n.z, 1e-6)
+	end)
+
+	it("should compute area", function()
+		assert.are.near(8, tri:area(), 1e-6)
+	end)
+
+	it("should compute centroid", function()
+		local c = tri:centroid()
+		assert.are.near(4/3, c.x, 1e-6)
+		assert.are.near(4/3, c.y, 1e-6)
+		assert.are.near(0, c.z, 1e-6)
+	end)
+
+	it("should compute barycentric coordinates", function()
+		local u, v, w = tri:get_barycentric(XVec3(0, 0, 0))
+		assert.are.near(1, u, 1e-6)
+		assert.are.near(0, v, 1e-6)
+		assert.are.near(0, w, 1e-6)
+	end)
+
+	it("should detect point containment (inside)", function()
+		assert.is_true(tri:contains_point(XVec3(1, 1, 0)))
+	end)
+
+	it("should detect point containment (outside)", function()
+		assert.is_false(tri:contains_point(XVec3(3, 3, 0)))
+	end)
+
+	it("should detect point on vertex", function()
+		assert.is_true(tri:contains_point(XVec3(0, 0, 0)))
+	end)
+
+	it("should detect point on edge", function()
+		assert.is_true(tri:contains_point(XVec3(2, 0, 0)))
+	end)
+
+	it("should intersect ray through center", function()
+		local ray = XRay(XVec3(1, 1, 5), XVec3(0, 0, -1))
+		local hit = tri:intersectRay(ray)
+		assert.is_not_nil(hit)
+		assert.are.near(0, hit.z, 1e-6)
+	end)
+
+	it("should miss ray outside triangle", function()
+		local ray = XRay(XVec3(10, 10, 5), XVec3(0, 0, -1))
+		assert.is_nil(tri:intersectRay(ray))
+	end)
+
+	it("should compute distance_to_point above center", function()
+		local d = tri:distance_to_point(XVec3(1, 1, 3))
+		assert.are.near(3, d, 1e-6)
+	end)
+
+	it("should compute distance_to_point outside (nearest edge)", function()
+		local d = tri:distance_to_point(XVec3(-1, 0, 0))
+		assert.are.near(1, d, 1e-6)
+	end)
+end)
+
+describe("XCapsule", function()
+	local cap
+	setup(function()
+		cap = XCapsule(XVec3(0, 0, 0), XVec3(0, 10, 0), 2)
+	end)
+
+	it("should create with callable syntax", function()
+		assert.is_truthy(cap)
+		assert.are.near(2, cap.radius, 1e-9)
+	end)
+
+	it("should format __tostring", function()
+		local s = tostring(cap)
+		assert.is_truthy(string.find(s, "XCapsule"))
+	end)
+
+	it("should compare equal capsules", function()
+		local cap2 = XCapsule(XVec3(0, 0, 0), XVec3(0, 10, 0), 2)
+		assert.is_true(cap == cap2)
+	end)
+
+	it("should compute center", function()
+		local c = cap:get_center()
+		assert.is_true(c == XVec3(0, 5, 0))
+	end)
+
+	it("should compute length", function()
+		assert.are.near(10, cap:get_length(), 1e-6)
+	end)
+
+	it("should detect point containment (on axis)", function()
+		assert.is_true(cap:contains_point(XVec3(0, 5, 0)))
+	end)
+
+	it("should detect point containment (at radius)", function()
+		assert.is_true(cap:contains_point(XVec3(2, 5, 0)))
+	end)
+
+	it("should reject point outside", function()
+		assert.is_false(cap:contains_point(XVec3(5, 5, 0)))
+	end)
+
+	it("should compute distance_to_point outside", function()
+		local d = cap:distance_to_point(XVec3(5, 5, 0))
+		assert.are.near(3, d, 1e-6)
+	end)
+
+	it("should compute distance_to_point inside (negative)", function()
+		local d = cap:distance_to_point(XVec3(0, 5, 0))
+		assert.are.near(-2, d, 1e-6)
+	end)
+
+	it("should intersect ray hitting cylinder body", function()
+		local ray = XRay(XVec3(10, 5, 0), XVec3(-1, 0, 0))
+		local hit = cap:intersectRay(ray)
+		assert.is_not_nil(hit)
+		assert.are.near(2, hit.x, 1e-6)
+		assert.are.near(5, hit.y, 1e-6)
+	end)
+
+	it("should return nil for ray missing capsule", function()
+		local ray = XRay(XVec3(10, 5, 0), XVec3(0, 1, 0))
+		assert.is_nil(cap:intersectRay(ray))
+	end)
+
+	it("should detect sphere intersection", function()
+		local sphere = XBoundingSphere(XVec3(4, 5, 0), 3)
+		assert.is_true(cap:intersects_sphere(sphere))
+	end)
+
+	it("should detect capsule-capsule intersection", function()
+		local other = XCapsule(XVec3(3, 0, 0), XVec3(3, 10, 0), 2)
+		assert.is_true(cap:intersects_capsule(other))
+	end)
+
+	it("should reject non-intersecting capsules", function()
+		local other = XCapsule(XVec3(10, 0, 0), XVec3(10, 10, 0), 1)
+		assert.is_false(cap:intersects_capsule(other))
+	end)
+
+	it("should handle degenerate case (start == end_point) as sphere", function()
+		local degen = XCapsule(XVec3(0, 0, 0), XVec3(0, 0, 0), 5)
+		assert.is_true(degen:contains_point(XVec3(3, 0, 0)))
+		assert.is_false(degen:contains_point(XVec3(6, 0, 0)))
+	end)
+end)
+
+describe("XOBB", function()
+	it("should create with identity orientation", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		assert.is_truthy(obb)
+		assert.is_true(obb.orientation == XMat3.new())
+	end)
+
+	it("should create from quaternion", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 4)
+		local obb = XOBB.from_quat(XVec3(0, 0, 0), XVec3(1, 1, 1), q)
+		assert.is_true(obb.orientation == q:to_mat3())
+	end)
+
+	it("should format __tostring", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		assert.is_truthy(string.find(tostring(obb), "XOBB"))
+	end)
+
+	it("should compare equal OBBs", function()
+		local a = XOBB(XVec3(0, 0, 0), XVec3(1, 2, 3))
+		local b = XOBB(XVec3(0, 0, 0), XVec3(1, 2, 3))
+		assert.is_true(a == b)
+	end)
+
+	it("should detect point containment (axis-aligned)", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(2, 2, 2))
+		assert.is_true(obb:contains_point(XVec3(1, 1, 1)))
+		assert.is_false(obb:contains_point(XVec3(3, 0, 0)))
+	end)
+
+	it("should detect point containment (rotated)", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 0, 1), math.pi / 4)
+		local obb = XOBB.from_quat(XVec3(0, 0, 0), XVec3(2, 1, 1), q)
+		-- Point along the rotated x-axis at 45 degrees
+		local p = XVec3(1, 1, 0) -- this is along the rotated x-axis direction
+		assert.is_true(obb:contains_point(p))
+	end)
+
+	it("should return 8 corners", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local corners = obb:get_corners()
+		assert.are.equal(8, #corners)
+	end)
+
+	it("axis-aligned OBB corners should match AABB corners", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local corners = obb:get_corners()
+		-- All corners should have absolute values of 1 on each axis
+		for _, c in ipairs(corners) do
+			assert.are.near(1, math.abs(c.x), 1e-6)
+			assert.are.near(1, math.abs(c.y), 1e-6)
+			assert.are.near(1, math.abs(c.z), 1e-6)
+		end
+	end)
+
+	it("should intersect ray (axis-aligned)", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local ray = XRay(XVec3(-5, 0, 0), XVec3(1, 0, 0))
+		local hit = obb:intersectRay(ray)
+		assert.is_not_nil(hit)
+		assert.are.near(-1, hit.x, 1e-6)
+	end)
+
+	it("should miss ray", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local ray = XRay(XVec3(-5, 5, 0), XVec3(1, 0, 0))
+		assert.is_nil(obb:intersectRay(ray))
+	end)
+
+	it("should intersect ray (rotated OBB)", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 0, 1), math.pi / 4)
+		local obb = XOBB.from_quat(XVec3(0, 0, 0), XVec3(2, 0.5, 1), q)
+		-- Ray along x-axis should hit the rotated box
+		local ray = XRay(XVec3(-5, 0, 0), XVec3(1, 0, 0))
+		local hit = obb:intersectRay(ray)
+		assert.is_not_nil(hit)
+	end)
+
+	it("should intersect AABB", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local aabb = XAABox(XVec3(-0.5, -0.5, -0.5), XVec3(0.5, 0.5, 0.5))
+		assert.is_true(obb:intersects_aabb(aabb))
+	end)
+
+	it("should not intersect distant AABB", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local aabb = XAABox(XVec3(5, 5, 5), XVec3(6, 6, 6))
+		assert.is_false(obb:intersects_aabb(aabb))
+	end)
+
+	it("should intersect OBB-OBB (overlapping)", function()
+		local a = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local b = XOBB(XVec3(1.5, 0, 0), XVec3(1, 1, 1))
+		assert.is_true(a:intersects_box(b))
+	end)
+
+	it("should not intersect OBB-OBB (separated)", function()
+		local a = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local b = XOBB(XVec3(5, 0, 0), XVec3(1, 1, 1))
+		assert.is_false(a:intersects_box(b))
+	end)
+
+	it("should compute distance_to_point (outside)", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local d = obb:distance_to_point(XVec3(4, 0, 0))
+		assert.are.near(3, d, 1e-6)
+	end)
+
+	it("should compute distance_to_point (inside = 0)", function()
+		local obb = XOBB(XVec3(0, 0, 0), XVec3(1, 1, 1))
+		local d = obb:distance_to_point(XVec3(0, 0, 0))
+		assert.are.near(0, d, 1e-6)
+	end)
+end)
+
+describe("XBezier3", function()
+	local bez
+	setup(function()
+		bez = XBezier3(XVec3(0, 0, 0), XVec3(1, 2, 0), XVec3(3, 2, 0), XVec3(4, 0, 0))
+	end)
+
+	it("should evaluate at t=0 to p0", function()
+		assert.is_true(bez:evaluate(0) == XVec3(0, 0, 0))
+	end)
+
+	it("should evaluate at t=1 to p3", function()
+		assert.is_true(bez:evaluate(1) == XVec3(4, 0, 0))
+	end)
+
+	it("should evaluate at t=0.5 (midpoint)", function()
+		local mid = bez:evaluate(0.5)
+		assert.is_truthy(mid)
+		-- For this curve, midpoint should be somewhere reasonable
+		assert.is_true(mid.x > 0 and mid.x < 4)
+	end)
+
+	it("should compute tangent at t=0 pointing toward p1", function()
+		local tan = bez:tangent(0)
+		-- Tangent at t=0 = 3*(p1 - p0) = 3*(1,2,0) = (3,6,0)
+		assert.are.near(3, tan.x, 1e-6)
+		assert.are.near(6, tan.y, 1e-6)
+	end)
+
+	it("should split into two curves", function()
+		local left, right = bez:split(0.5)
+		assert.is_true(left:evaluate(0) == bez:evaluate(0))
+		assert.is_true(right:evaluate(1) == bez:evaluate(1))
+		-- Split point should match
+		assert.is_true(left:evaluate(1) == bez:evaluate(0.5))
+	end)
+
+	it("should compute positive arc length", function()
+		local len = bez:length()
+		assert.is_true(len > 0)
+		-- Straight line from p0 to p3 would be 4, curve should be longer
+		assert.is_true(len > 4)
+	end)
+
+	it("should format __tostring", function()
+		assert.is_truthy(string.find(tostring(bez), "XBezier3"))
+	end)
+
+	it("should compare equal curves", function()
+		local bez2 = XBezier3(XVec3(0, 0, 0), XVec3(1, 2, 0), XVec3(3, 2, 0), XVec3(4, 0, 0))
+		assert.is_true(bez == bez2)
+	end)
+end)
+
+describe("XCatmullRom", function()
+	local cr
+	setup(function()
+		cr = XCatmullRom(XVec3(-1, 0, 0), XVec3(0, 0, 0), XVec3(1, 0, 0), XVec3(2, 0, 0))
+	end)
+
+	it("should evaluate at t=0 to p1", function()
+		assert.is_true(cr:evaluate(0) == XVec3(0, 0, 0))
+	end)
+
+	it("should evaluate at t=1 to p2", function()
+		assert.is_true(cr:evaluate(1) == XVec3(1, 0, 0))
+	end)
+
+	it("should evaluate at t=0.5 to midpoint of p1-p2 for collinear points", function()
+		local mid = cr:evaluate(0.5)
+		assert.are.near(0.5, mid.x, 1e-6)
+		assert.are.near(0, mid.y, 1e-6)
+	end)
+
+	it("should compute tangent", function()
+		local tan = cr:tangent(0)
+		-- For evenly spaced collinear points, tangent at t=0 should point in +x
+		assert.is_true(tan.x > 0)
+	end)
+
+	it("should compute positive arc length", function()
+		local len = cr:length()
+		assert.is_true(len > 0)
+		-- Collinear points: length should be ~1 (distance from p1 to p2)
+		assert.are.near(1, len, 1e-3)
+	end)
+
+	it("should format __tostring", function()
+		assert.is_truthy(string.find(tostring(cr), "XCatmullRom"))
+	end)
+
+	it("should compare equal splines", function()
+		local cr2 = XCatmullRom(XVec3(-1, 0, 0), XVec3(0, 0, 0), XVec3(1, 0, 0), XVec3(2, 0, 0))
+		assert.is_true(cr == cr2)
+	end)
+end)
+
+describe("XRay:distance_to_ray", function()
+	it("should return 0 for identical rays", function()
+		local r = XRay(XVec3(0, 0, 0), XVec3(1, 0, 0))
+		assert.are.near(0, r:distance_to_ray(r), 1e-6)
+	end)
+
+	it("should compute distance for parallel offset rays", function()
+		local r1 = XRay(XVec3(0, 0, 0), XVec3(1, 0, 0))
+		local r2 = XRay(XVec3(0, 3, 0), XVec3(1, 0, 0))
+		assert.are.near(3, r1:distance_to_ray(r2), 1e-6)
+	end)
+
+	it("should compute distance for perpendicular skew rays", function()
+		local r1 = XRay(XVec3(0, 0, 0), XVec3(1, 0, 0))
+		local r2 = XRay(XVec3(0, 0, 5), XVec3(0, 1, 0))
+		assert.are.near(5, r1:distance_to_ray(r2), 1e-6)
+	end)
+
+	it("should compute distance for intersecting rays (=0)", function()
+		local r1 = XRay(XVec3(0, 0, 0), XVec3(1, 0, 0))
+		local r2 = XRay(XVec3(5, 0, 0), XVec3(0, 1, 0))
+		assert.are.near(0, r1:distance_to_ray(r2), 1e-6)
+	end)
+
+	it("should handle opposing rays", function()
+		local r1 = XRay(XVec3(0, 0, 0), XVec3(1, 0, 0))
+		local r2 = XRay(XVec3(5, 3, 0), XVec3(-1, 0, 0))
+		-- Rays travel toward each other, closest point at origins projected
+		-- r1 at t=5 reaches (5,0,0), r2 at t=0 is at (5,3,0), distance=3
+		assert.are.near(3, r1:distance_to_ray(r2), 1e-6)
+	end)
+end)
