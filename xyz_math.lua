@@ -836,6 +836,10 @@ function XPlane:intersectRay(ray)
     return nil -- Intersection behind ray origin
 end
 
+function XPlane:distance_to_point(point)
+    return self.normal:dot(point) + self.distance
+end
+
 XRay = {}
 XRay_mt = {__index = XRay}
 
@@ -871,6 +875,32 @@ function XRay:transform(matrix)
     local new_origin = XVec3.new(new_origin4.x, new_origin4.y, new_origin4.z)
     local new_direction = XVec3.new(new_direction4.x, new_direction4.y, new_direction4.z)
     return XRay.new(new_origin, new_direction)
+end
+
+function XRay:intersectTriangle(v0, v1, v2)
+    local edge1 = v1 - v0
+    local edge2 = v2 - v0
+    local h = self.direction:cross(edge2)
+    local a = edge1:dot(h)
+    if math.abs(a) < 1e-9 then return nil end
+    local f = 1.0 / a
+    local s = self.origin - v0
+    local u = f * s:dot(h)
+    if u < 0 or u > 1 then return nil end
+    local q = s:cross(edge1)
+    local v = f * self.direction:dot(q)
+    if v < 0 or u + v > 1 then return nil end
+    local t = f * edge2:dot(q)
+    if t > 1e-9 then return self:pointAt(t) end
+    return nil
+end
+
+function XRay:distance_to_point(point)
+    local v = point - self.origin
+    local t = v:dot(self.direction) / self.direction:dot(self.direction)
+    if t < 0 then t = 0 end
+    local closest = self:pointAt(t)
+    return (point - closest):length()
 end
 
 function XMin(a, b)
@@ -985,6 +1015,17 @@ function XBoundingSphere:intersects_sphere(other)
 	return dist <= (self.radius + other.radius)
 end
 
+-- Returns true if the sphere intersects with an axis-aligned bounding box
+function XBoundingSphere:intersects_box(box)
+    local cx = math.max(box.min.x, math.min(self.center.x, box.max.x))
+    local cy = math.max(box.min.y, math.min(self.center.y, box.max.y))
+    local cz = math.max(box.min.z, math.min(self.center.z, box.max.z))
+    local dx = cx - self.center.x
+    local dy = cy - self.center.y
+    local dz = cz - self.center.z
+    return (dx * dx + dy * dy + dz * dz) <= self.radius * self.radius
+end
+
 -- Expands the sphere to contain the given point
 function XBoundingSphere:expand_to_point(point)
 	local dist = (point - self.center):length()
@@ -999,6 +1040,27 @@ function XBoundingSphere:expand_to_sphere(other)
 	if dist + other.radius > self.radius then
 		self.radius = dist + other.radius
 	end
+end
+
+-- Ray-sphere intersection via quadratic formula. Returns nearest intersection point or nil.
+function XBoundingSphere:intersectRay(ray)
+    local oc = ray.origin - self.center
+    local a = ray.direction:dot(ray.direction)
+    local b = 2 * oc:dot(ray.direction)
+    local c = oc:dot(oc) - self.radius * self.radius
+    local discriminant = b * b - 4 * a * c
+    if discriminant < 0 then return nil end
+    local sqrt_d = math.sqrt(discriminant)
+    local t1 = (-b - sqrt_d) / (2 * a)
+    if t1 >= 0 then return ray:pointAt(t1) end
+    local t2 = (-b + sqrt_d) / (2 * a)
+    if t2 >= 0 then return ray:pointAt(t2) end
+    return nil
+end
+
+-- Distance to surface, negative if inside
+function XBoundingSphere:distance_to_point(point)
+    return (point - self.center):length() - self.radius
 end
 
 -- Creates a sphere that contains both input spheres
@@ -1082,6 +1144,17 @@ function XAABox:intersects_box(other)
 		and self.min.z <= other.max.z and self.max.z >= other.min.z
 end
 
+-- Returns true if the box intersects with a bounding sphere
+function XAABox:intersects_sphere(sphere)
+    local cx = math.max(self.min.x, math.min(sphere.center.x, self.max.x))
+    local cy = math.max(self.min.y, math.min(sphere.center.y, self.max.y))
+    local cz = math.max(self.min.z, math.min(sphere.center.z, self.max.z))
+    local dx = cx - sphere.center.x
+    local dy = cy - sphere.center.y
+    local dz = cz - sphere.center.z
+    return (dx * dx + dy * dy + dz * dz) <= sphere.radius * sphere.radius
+end
+
 -- Expands the box to contain the given point
 function XAABox:expand_to_point(point)
 	self.min.x = math.min(self.min.x, point.x)
@@ -1100,6 +1173,40 @@ function XAABox:expand_to_box(other)
 	self.max.x = math.max(self.max.x, other.max.x)
 	self.max.y = math.max(self.max.y, other.max.y)
 	self.max.z = math.max(self.max.z, other.max.z)
+end
+
+-- Ray-AABB intersection via slab method. Returns nearest intersection point or nil.
+function XAABox:intersectRay(ray)
+    local tmin = -math.huge
+    local tmax = math.huge
+    local axes = {"x", "y", "z"}
+    for _, axis in ipairs(axes) do
+        local origin = ray.origin[axis]
+        local dir = ray.direction[axis]
+        local bmin = self.min[axis]
+        local bmax = self.max[axis]
+        if math.abs(dir) < 1e-12 then
+            if origin < bmin or origin > bmax then return nil end
+        else
+            local t1 = (bmin - origin) / dir
+            local t2 = (bmax - origin) / dir
+            if t1 > t2 then t1, t2 = t2, t1 end
+            if t1 > tmin then tmin = t1 end
+            if t2 < tmax then tmax = t2 end
+            if tmin > tmax then return nil end
+        end
+    end
+    if tmax < 0 then return nil end
+    local t = tmin >= 0 and tmin or tmax
+    return ray:pointAt(t)
+end
+
+-- Distance to surface, 0 if inside
+function XAABox:distance_to_point(point)
+    local dx = math.max(self.min.x - point.x, 0, point.x - self.max.x)
+    local dy = math.max(self.min.y - point.y, 0, point.y - self.max.y)
+    local dz = math.max(self.min.z - point.z, 0, point.z - self.max.z)
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
 -- Creates a box that contains both input boxes

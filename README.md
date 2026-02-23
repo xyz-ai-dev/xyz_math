@@ -186,6 +186,8 @@ Ray with origin and direction.
 - Methods:
   * `pointAt(t)`: Returns point along ray at distance t
   * `transform(matrix)`: Returns transformed ray
+  * `intersectTriangle(v0, v1, v2)`: Möller-Trumbore ray-triangle intersection; returns nearest intersection point (XVec3) or nil
+  * `distance_to_point(point)`: Shortest distance from ray to point (clamped to ray origin)
 
 #### XPlane
 Plane defined by normal and distance.
@@ -197,6 +199,7 @@ Plane defined by normal and distance.
 - Methods:
   * `side(point)`: Returns which side of plane a point is on
   * `intersectRay(ray)`: Returns intersection point with ray
+  * `distance_to_point(point)`: Signed distance from plane to point (positive = normal side)
 
 ### Bounding Volumes
 
@@ -210,6 +213,9 @@ Sphere defined by center and radius.
 - Methods:
   * `contains_point()`: Tests if point is inside sphere
   * `intersects_sphere()`: Tests for intersection with another sphere
+  * `intersects_box(box)`: Tests for intersection with an XAABox
+  * `intersectRay(ray)`: Returns nearest intersection point (XVec3) or nil
+  * `distance_to_point(point)`: Distance to sphere surface (negative if inside)
   * `expand_to_point()`: Expands sphere to contain point
   * `expand_to_sphere()`: Expands sphere to contain another sphere
 - Static methods:
@@ -225,6 +231,9 @@ Axis-aligned bounding box defined by min and max points.
 - Methods:
   * `contains_point()`: Tests if point is inside box
   * `intersects_box()`: Tests for intersection with another box
+  * `intersects_sphere(sphere)`: Tests for intersection with an XBoundingSphere
+  * `intersectRay(ray)`: Returns nearest intersection point (XVec3) or nil (slab method)
+  * `distance_to_point(point)`: Distance to box surface (0 if inside)
   * `expand_to_point()`: Expands box to contain point
   * `expand_to_box()`: Expands box to contain another box
   * `get_center()`: Returns center point of box
