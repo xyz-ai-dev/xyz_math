@@ -560,6 +560,46 @@ function XMat4.from_euler(x, y, z)
 	return rz * ry * rx
 end
 
+function XMat4.look_at(eye, center, up)
+    local f = (center - eye):normalize()
+    local r = f:cross(up):normalize()
+    local u = r:cross(f)
+    return XMat4.new(
+         r.x,  r.y,  r.z, -r:dot(eye),
+         u.x,  u.y,  u.z, -u:dot(eye),
+        -f.x, -f.y, -f.z,  f:dot(eye),
+         0,    0,    0,    1
+    )
+end
+
+function XMat4.perspective(fov_y, aspect, near, far)
+    local f = 1.0 / math.tan(fov_y * 0.5)
+    return XMat4.new(
+        f / aspect, 0,  0,                            0,
+        0,          f,  0,                            0,
+        0,          0, (far + near) / (near - far),  (2 * far * near) / (near - far),
+        0,          0, -1,                            0
+    )
+end
+
+function XMat4.frustum(left, right, bottom, top, near, far)
+    return XMat4.new(
+        (2*near)/(right-left),  0,                       (right+left)/(right-left),   0,
+        0,                      (2*near)/(top-bottom),   (top+bottom)/(top-bottom),   0,
+        0,                      0,                       -(far+near)/(far-near),     -(2*far*near)/(far-near),
+        0,                      0,                       -1,                          0
+    )
+end
+
+function XMat4.orthographic(left, right, bottom, top, near, far)
+    return XMat4.new(
+        2/(right-left),  0,                0,                -(right+left)/(right-left),
+        0,                2/(top-bottom),  0,                -(top+bottom)/(top-bottom),
+        0,                0,               -2/(far-near),    -(far+near)/(far-near),
+        0,                0,                0,                1
+    )
+end
+
 function XMat4:inverse()
     local a = self
     local s0 = a[1] * a[6]  - a[2] * a[5]
@@ -1085,4 +1125,89 @@ end
 -- Gets the size/extents of the box
 function XAABox:get_size()
 	return self.max - self.min
+end
+
+XFrustum = {}
+XFrustum_mt = {__index = XFrustum}
+
+function XFrustum.new(left, right, bottom, top, near, far)
+    return setmetatable({
+        left = left,
+        right = right,
+        bottom = bottom,
+        top = top,
+        near = near,
+        far = far
+    }, XFrustum_mt)
+end
+
+setmetatable(XFrustum, {
+    __call = function(_, left, right, bottom, top, near, far)
+        return XFrustum.new(left, right, bottom, top, near, far)
+    end
+})
+
+XFrustum_mt.__tostring = function(self)
+    return string.format("XFrustum(left=%s, right=%s, bottom=%s, top=%s, near=%s, far=%s)",
+        tostring(self.left), tostring(self.right),
+        tostring(self.bottom), tostring(self.top),
+        tostring(self.near), tostring(self.far))
+end
+
+XFrustum_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.left == b.left and a.right == b.right
+        and a.bottom == b.bottom and a.top == b.top
+        and a.near == b.near and a.far == b.far
+end
+
+function XFrustum.from_matrix(vp)
+    local function make_plane(nx, ny, nz, d)
+        local len = math.sqrt(nx*nx + ny*ny + nz*nz)
+        return XPlane.new(XVec3.new(nx/len, ny/len, nz/len), d/len)
+    end
+
+    local left   = make_plane(vp[13]+vp[1],  vp[14]+vp[2],  vp[15]+vp[3],  vp[16]+vp[4])
+    local right  = make_plane(vp[13]-vp[1],  vp[14]-vp[2],  vp[15]-vp[3],  vp[16]-vp[4])
+    local bottom = make_plane(vp[13]+vp[5],  vp[14]+vp[6],  vp[15]+vp[7],  vp[16]+vp[8])
+    local top    = make_plane(vp[13]-vp[5],  vp[14]-vp[6],  vp[15]-vp[7],  vp[16]-vp[8])
+    local near   = make_plane(vp[13]+vp[9],  vp[14]+vp[10], vp[15]+vp[11], vp[16]+vp[12])
+    local far    = make_plane(vp[13]-vp[9],  vp[14]-vp[10], vp[15]-vp[11], vp[16]-vp[12])
+
+    return XFrustum.new(left, right, bottom, top, near, far)
+end
+
+function XFrustum:contains_point(point)
+    local planes = {self.left, self.right, self.bottom, self.top, self.near, self.far}
+    for _, plane in ipairs(planes) do
+        if plane:side(point) < 0 then
+            return false
+        end
+    end
+    return true
+end
+
+function XFrustum:intersects_sphere(sphere)
+    local planes = {self.left, self.right, self.bottom, self.top, self.near, self.far}
+    for _, plane in ipairs(planes) do
+        local dist = plane.normal:dot(sphere.center) + plane.distance
+        if dist < -sphere.radius then
+            return false
+        end
+    end
+    return true
+end
+
+function XFrustum:intersects_box(box)
+    local planes = {self.left, self.right, self.bottom, self.top, self.near, self.far}
+    for _, plane in ipairs(planes) do
+        -- p-vertex: the corner most aligned with the plane normal
+        local px = plane.normal.x >= 0 and box.max.x or box.min.x
+        local py = plane.normal.y >= 0 and box.max.y or box.min.y
+        local pz = plane.normal.z >= 0 and box.max.z or box.min.z
+        if plane.normal:dot(XVec3.new(px, py, pz)) + plane.distance < 0 then
+            return false
+        end
+    end
+    return true
 end

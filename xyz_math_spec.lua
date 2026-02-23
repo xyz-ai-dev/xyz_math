@@ -1043,3 +1043,327 @@ describe("unpack compatibility", function()
 		assert.are.equal(1, result[16])  -- homogeneous
 	end)
 end)
+
+describe("XMat4.look_at", function()
+	it("should produce identity-like view for camera at origin looking down -Z", function()
+		local V = XMat4.look_at(XVec3(0,0,0), XVec3(0,0,-1), XVec3(0,1,0))
+		assert.is_true(V == XMat4.new())
+	end)
+
+	it("should translate correctly for offset eye", function()
+		local eye = XVec3(0, 0, 5)
+		local V = XMat4.look_at(eye, XVec3(0,0,0), XVec3(0,1,0))
+		-- Translation column should move eye to origin
+		assert.are.near(0, V[4], 1e-6)
+		assert.are.near(0, V[8], 1e-6)
+		assert.are.near(-5, V[12], 1e-6)
+	end)
+
+	it("should transform center to -Z axis in view space", function()
+		local eye = XVec3(0, 0, 5)
+		local center = XVec3(0, 0, 0)
+		local V = XMat4.look_at(eye, center, XVec3(0,1,0))
+		local center_view = V * XVec4(center.x, center.y, center.z, 1)
+		-- center should be at (0, 0, -distance) in view space
+		assert.are.near(0, center_view.x, 1e-6)
+		assert.are.near(0, center_view.y, 1e-6)
+		assert.is_true(center_view.z < 0)
+	end)
+
+	it("should transform eye to origin", function()
+		local eye = XVec3(3, 4, 5)
+		local V = XMat4.look_at(eye, XVec3(0,0,0), XVec3(0,1,0))
+		local eye_view = V * XVec4(eye.x, eye.y, eye.z, 1)
+		assert.are.near(0, eye_view.x, 1e-6)
+		assert.are.near(0, eye_view.y, 1e-6)
+		assert.are.near(0, eye_view.z, 1e-6)
+	end)
+
+	it("should produce invertible matrix", function()
+		local V = XMat4.look_at(XVec3(1,2,3), XVec3(0,0,0), XVec3(0,1,0))
+		local product = V * V:inverse()
+		assert.is_true(product == XMat4.new())
+	end)
+end)
+
+describe("XMat4.perspective", function()
+	it("should map near plane center to NDC z=-1", function()
+		local near, far = 0.1, 100
+		local P = XMat4.perspective(math.pi/2, 1, near, far)
+		-- Point on near plane: (0, 0, -near, 1)
+		local clip = P * XVec4(0, 0, -near, 1)
+		local ndc_z = clip.z / clip.w
+		assert.are.near(-1, ndc_z, 1e-5)
+	end)
+
+	it("should map far plane center to NDC z=1", function()
+		local near, far = 0.1, 100
+		local P = XMat4.perspective(math.pi/2, 1, near, far)
+		local clip = P * XVec4(0, 0, -far, 1)
+		local ndc_z = clip.z / clip.w
+		assert.are.near(1, ndc_z, 1e-5)
+	end)
+
+	it("should set w_clip == -z_eye", function()
+		local P = XMat4.perspective(math.pi/3, 16/9, 1, 1000)
+		local clip = P * XVec4(5, 3, -50, 1)
+		assert.are.near(50, clip.w, 1e-6)
+	end)
+
+	it("should respect aspect ratio", function()
+		local P = XMat4.perspective(math.pi/2, 2, 1, 100)
+		-- f = 1/tan(pi/4) = 1; P[1] = f/aspect = 0.5, P[6] = f = 1
+		assert.are.near(0.5, P[1], 1e-6)
+		assert.are.near(1, P[6], 1e-6)
+	end)
+
+	it("should produce invertible matrix", function()
+		local P = XMat4.perspective(math.pi/2, 1.5, 0.1, 100)
+		local product = P * P:inverse()
+		assert.is_true(product == XMat4.new())
+	end)
+end)
+
+describe("XMat4.frustum", function()
+	it("should match perspective for symmetric frustum", function()
+		local near, far = 0.1, 100
+		local fov_y = math.pi / 3
+		local aspect = 16 / 9
+		local f = 1.0 / math.tan(fov_y * 0.5)
+		local top = near / f
+		local bottom = -top
+		local right = top * aspect
+		local left = -right
+
+		local P = XMat4.perspective(fov_y, aspect, near, far)
+		local F = XMat4.frustum(left, right, bottom, top, near, far)
+		assert.is_true(P == F)
+	end)
+
+	it("should map near plane corners to NDC corners", function()
+		local near, far = 1, 100
+		local left, right, bottom, top = -1, 1, -1, 1
+		local F = XMat4.frustum(left, right, bottom, top, near, far)
+		-- Bottom-left of near plane: (left, bottom, -near)
+		local clip = F * XVec4(left, bottom, -near, 1)
+		local ndc_x = clip.x / clip.w
+		local ndc_y = clip.y / clip.w
+		assert.are.near(-1, ndc_x, 1e-5)
+		assert.are.near(-1, ndc_y, 1e-5)
+	end)
+
+	it("should support asymmetric frustum", function()
+		local F = XMat4.frustum(-2, 1, -1, 2, 1, 100)
+		-- Just verify it's a valid, non-identity matrix
+		assert.is_false(F == XMat4.new())
+		-- And it still has -1 at [15] (perspective row)
+		assert.are.near(-1, F[15], 1e-6)
+	end)
+end)
+
+describe("XMat4.orthographic", function()
+	it("should map right-top-near corner to (1, 1, -1)", function()
+		local O = XMat4.orthographic(-10, 10, -5, 5, 1, 100)
+		local clip = O * XVec4(10, 5, -1, 1)
+		assert.are.near(1, clip.x, 1e-5)
+		assert.are.near(1, clip.y, 1e-5)
+		assert.are.near(-1, clip.z, 1e-5)
+	end)
+
+	it("should map left-bottom-far corner to (-1, -1, 1)", function()
+		local O = XMat4.orthographic(-10, 10, -5, 5, 1, 100)
+		local clip = O * XVec4(-10, -5, -100, 1)
+		assert.are.near(-1, clip.x, 1e-5)
+		assert.are.near(-1, clip.y, 1e-5)
+		assert.are.near(1, clip.z, 1e-5)
+	end)
+
+	it("should keep w == 1 (no perspective divide)", function()
+		local O = XMat4.orthographic(-1, 1, -1, 1, 0.1, 10)
+		local clip = O * XVec4(0.5, 0.5, -5, 1)
+		assert.are.equal(1, clip.w)
+	end)
+
+	it("should map center of volume to origin", function()
+		local O = XMat4.orthographic(-10, 10, -5, 5, 1, 100)
+		-- Center is at (0, 0, -50.5) in view space
+		local clip = O * XVec4(0, 0, -50.5, 1)
+		assert.are.near(0, clip.x, 1e-5)
+		assert.are.near(0, clip.y, 1e-5)
+		assert.are.near(0, clip.z, 1e-5)
+	end)
+
+	it("should produce invertible matrix", function()
+		local O = XMat4.orthographic(-10, 10, -5, 5, 1, 100)
+		local product = O * O:inverse()
+		assert.is_true(product == XMat4.new())
+	end)
+end)
+
+describe("XFrustum", function()
+	it("should create from 6 planes directly", function()
+		local planes = {}
+		for i = 1, 6 do
+			planes[i] = XPlane(XVec3(0, 1, 0), -i)
+		end
+		local f = XFrustum.new(planes[1], planes[2], planes[3], planes[4], planes[5], planes[6])
+		assert.is_true(f.left == planes[1])
+		assert.is_true(f.right == planes[2])
+		assert.is_true(f.bottom == planes[3])
+		assert.is_true(f.top == planes[4])
+		assert.is_true(f.near == planes[5])
+		assert.is_true(f.far == planes[6])
+	end)
+
+	it("should support callable syntax", function()
+		local p = XPlane(XVec3(1,0,0), 0)
+		local f = XFrustum(p, p, p, p, p, p)
+		assert.is_true(f.left == p)
+	end)
+
+	it("should format __tostring", function()
+		local p = XPlane(XVec3(0,1,0), 5)
+		local f = XFrustum(p, p, p, p, p, p)
+		local s = tostring(f)
+		assert.is_truthy(string.find(s, "XFrustum"))
+		assert.is_truthy(string.find(s, "XPlane"))
+	end)
+
+	it("should compare equal frustums", function()
+		local p = XPlane(XVec3(0,1,0), 5)
+		local f1 = XFrustum(p, p, p, p, p, p)
+		local f2 = XFrustum(p, p, p, p, p, p)
+		assert.is_true(f1 == f2)
+	end)
+end)
+
+describe("XFrustum.from_matrix", function()
+	it("should extract 6 planes from VP matrix", function()
+		local V = XMat4.look_at(XVec3(0,0,5), XVec3(0,0,0), XVec3(0,1,0))
+		local P = XMat4.perspective(math.pi/2, 1, 1, 100)
+		local VP = P * V
+		local f = XFrustum.from_matrix(VP)
+		-- All 6 planes should be valid XPlane objects
+		assert.is_truthy(f.left)
+		assert.is_truthy(f.right)
+		assert.is_truthy(f.bottom)
+		assert.is_truthy(f.top)
+		assert.is_truthy(f.near)
+		assert.is_truthy(f.far)
+	end)
+
+	it("should have normalized plane normals", function()
+		local V = XMat4.look_at(XVec3(0,0,5), XVec3(0,0,0), XVec3(0,1,0))
+		local P = XMat4.perspective(math.pi/2, 1, 1, 100)
+		local VP = P * V
+		local f = XFrustum.from_matrix(VP)
+		local planes = {f.left, f.right, f.bottom, f.top, f.near, f.far}
+		for _, plane in ipairs(planes) do
+			assert.are.near(1, plane.normal:length(), 1e-6)
+		end
+	end)
+end)
+
+describe("XFrustum:contains_point", function()
+	local frustum
+	setup(function()
+		local V = XMat4.look_at(XVec3(0,0,5), XVec3(0,0,0), XVec3(0,1,0))
+		local P = XMat4.perspective(math.pi/2, 1, 1, 100)
+		local VP = P * V
+		frustum = XFrustum.from_matrix(VP)
+	end)
+
+	it("should accept point in center of frustum", function()
+		assert.is_true(frustum:contains_point(XVec3(0, 0, 0)))
+	end)
+
+	it("should reject point behind camera", function()
+		assert.is_false(frustum:contains_point(XVec3(0, 0, 10)))
+	end)
+
+	it("should reject point beyond far plane", function()
+		assert.is_false(frustum:contains_point(XVec3(0, 0, -200)))
+	end)
+
+	it("should reject point outside side plane", function()
+		assert.is_false(frustum:contains_point(XVec3(500, 0, 0)))
+	end)
+
+	it("should accept point just inside near plane", function()
+		-- Camera at z=5, near=1, so near plane is at z=4 in world space
+		assert.is_true(frustum:contains_point(XVec3(0, 0, 3.9)))
+	end)
+end)
+
+describe("XFrustum:intersects_sphere", function()
+	local frustum
+	setup(function()
+		local V = XMat4.look_at(XVec3(0,0,5), XVec3(0,0,0), XVec3(0,1,0))
+		local P = XMat4.perspective(math.pi/2, 1, 1, 100)
+		local VP = P * V
+		frustum = XFrustum.from_matrix(VP)
+	end)
+
+	it("should accept sphere inside frustum", function()
+		local s = XBoundingSphere(XVec3(0, 0, 0), 1)
+		assert.is_true(frustum:intersects_sphere(s))
+	end)
+
+	it("should reject sphere fully behind camera", function()
+		local s = XBoundingSphere(XVec3(0, 0, 20), 1)
+		assert.is_false(frustum:intersects_sphere(s))
+	end)
+
+	it("should accept sphere straddling near plane", function()
+		-- Near plane at z=4 in world space; sphere centered at z=4.5 with radius 1 straddles it
+		local s = XBoundingSphere(XVec3(0, 0, 4.5), 1)
+		assert.is_true(frustum:intersects_sphere(s))
+	end)
+
+	it("should reject sphere fully beyond far plane", function()
+		local s = XBoundingSphere(XVec3(0, 0, -200), 1)
+		assert.is_false(frustum:intersects_sphere(s))
+	end)
+
+	it("should accept sphere straddling side plane", function()
+		-- Large sphere at the edge should still intersect
+		local s = XBoundingSphere(XVec3(50, 0, -40), 60)
+		assert.is_true(frustum:intersects_sphere(s))
+	end)
+end)
+
+describe("XFrustum:intersects_box", function()
+	local frustum
+	setup(function()
+		local V = XMat4.look_at(XVec3(0,0,5), XVec3(0,0,0), XVec3(0,1,0))
+		local P = XMat4.perspective(math.pi/2, 1, 1, 100)
+		local VP = P * V
+		frustum = XFrustum.from_matrix(VP)
+	end)
+
+	it("should accept box inside frustum", function()
+		local b = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
+		assert.is_true(frustum:intersects_box(b))
+	end)
+
+	it("should reject box fully behind camera", function()
+		local b = XAABox(XVec3(-1, -1, 15), XVec3(1, 1, 20))
+		assert.is_false(frustum:intersects_box(b))
+	end)
+
+	it("should accept box straddling near plane", function()
+		-- Near plane at z=4; box from z=3.5 to z=4.5 straddles it
+		local b = XAABox(XVec3(-0.5, -0.5, 3.5), XVec3(0.5, 0.5, 4.5))
+		assert.is_true(frustum:intersects_box(b))
+	end)
+
+	it("should reject box fully beyond far plane", function()
+		local b = XAABox(XVec3(-1, -1, -200), XVec3(1, 1, -150))
+		assert.is_false(frustum:intersects_box(b))
+	end)
+
+	it("should reject box fully outside side plane", function()
+		local b = XAABox(XVec3(500, 500, -10), XVec3(510, 510, -5))
+		assert.is_false(frustum:intersects_box(b))
+	end)
+end)

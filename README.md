@@ -146,6 +146,10 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `rotation_z()`: Creates rotation matrix around Z axis
   * `rotation_around_axis()`: Creates rotation matrix around arbitrary axis
   * `from_euler()`: Creates rotation matrix from Euler angles
+  * `look_at(eye, center, up)`: Creates a view matrix (world to camera space)
+  * `perspective(fov_y, aspect, near, far)`: Creates a perspective projection matrix from vertical FOV (radians)
+  * `frustum(left, right, bottom, top, near, far)`: Creates a perspective projection matrix from explicit frustum bounds
+  * `orthographic(left, right, bottom, top, near, far)`: Creates an orthographic projection matrix
 
 #### XQuat
 Quaternion with x, y, z, w components (`w=1` identity). Avoids gimbal lock and interpolates smoothly via slerp.
@@ -227,6 +231,20 @@ Axis-aligned bounding box defined by min and max points.
   * `get_size()`: Returns size of box
 - Static methods:
   * `merge(box1, box2)`: Creates box containing both input boxes
+
+#### XFrustum
+View frustum defined by 6 XPlane objects (left, right, bottom, top, near, far) with inward-facing normals.
+
+- `XFrustum.new(left, right, bottom, top, near, far)` or `XFrustum(left, right, bottom, top, near, far)`: Create from 6 XPlane objects
+- Operations:
+  * Equality (`f1 == f2`): Floating-point tolerant comparison
+  * `tostring(f)`: Readable string representation
+- Methods:
+  * `contains_point(point)`: Tests if XVec3 is inside frustum (on positive side of all 6 planes)
+  * `intersects_sphere(sphere)`: Tests if XBoundingSphere intersects frustum
+  * `intersects_box(box)`: Tests if XAABox intersects frustum (p-vertex test)
+- Static methods:
+  * `from_matrix(vp)`: Extracts 6 normalized planes from a view-projection matrix (Gribb-Hartmann method)
 
 ### Utility Functions
 
