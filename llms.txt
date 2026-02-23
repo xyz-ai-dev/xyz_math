@@ -1,0 +1,111 @@
+# xyz_math
+
+> A 3D mathematics library for Lua with a clean, object-oriented API.
+
+xyz_math is a single-file Lua math library providing vectors, matrices, quaternions, geometric primitives, bounding volumes, splines, color, 2D geometry, noise generation, and utility functions. It targets game development, simulations, and graphics applications.
+
+## Installation
+
+```lua
+-- Via LuaRocks
+luarocks install xyz_math
+
+-- Or copy xyz_math.lua into your project
+local xyz_math = require("xyz_math")
+```
+
+All types are exposed as globals after require (XVec2, XVec3, XVec4, XMat3, XMat4, XQuat, etc.).
+
+## Types
+
+### Vectors
+
+- **XVec2(x, y)** — 2D vector. Methods: dot, cross (scalar), normalize, length, lerp, length_squared, distance_squared, reflect, project, angle_between, is_zero, rotate(angle), perpendicular. Operators: +, -, *, unary -, ==.
+- **XVec3(x, y, z)** — 3D vector. Methods: dot, cross (vector), normalize, length, lerp, length_squared, distance_squared, reflect, project, angle_between, is_zero. Operators: +, -, *, unary -, ==.
+- **XVec4(x, y, z, w)** — 4D vector. Methods: dot, normalize, length, lerp, length_squared, distance_squared, reflect, project, angle_between, is_zero. Operators: +, -, *, unary -, ==.
+
+### Matrices
+
+- **XMat3(...)** — 3x3 matrix (column-major, 9 values). Methods: inverse, transpose. Static: scale, rotation_x/y/z, rotation_around_axis, from_euler. Operators: * (matrix-matrix, matrix-vec3), ==.
+- **XMat4(...)** — 4x4 matrix (column-major, 16 values). Methods: inverse, decompose, transpose, transform_point, transform_direction. Static: scale, translate, rotation_x/y/z, rotation_around_axis, from_euler, from_trs, look_at, perspective, frustum, orthographic. Operators: * (matrix-matrix, matrix-vec4), ==.
+
+### Quaternions
+
+- **XQuat(x, y, z, w)** — Quaternion (identity: 0,0,0,1). Methods: length, normalize, dot, conjugate, inverse, slerp, nlerp, to_mat3, to_mat4, to_euler. Static: from_axis_angle, from_euler, from_mat3. Operators: * (quat-quat, quat-vec3), unary -, ==.
+
+### Geometric Primitives
+
+- **XRay(origin, direction)** — Ray. Methods: pointAt, transform, intersectTriangle, distance_to_point, distance_to_ray.
+- **XPlane(normal, distance)** — Plane. Methods: side, intersectRay, distance_to_point.
+- **XTriangle(v0, v1, v2)** — Triangle (XVec3 vertices). Methods: normal, area, centroid, get_barycentric, contains_point, intersectRay, distance_to_point.
+- **XCapsule(start, end_point, radius)** — Capsule. Methods: get_center, get_length, contains_point, distance_to_point, intersectRay, intersects_sphere, intersects_capsule.
+- **XOBB(center, half_extents, orientation)** — Oriented bounding box. Methods: contains_point, get_corners, intersectRay, intersects_aabb, intersects_box, distance_to_point. Static: from_quat.
+
+### Bounding Volumes
+
+- **XBoundingSphere(center, radius)** — Bounding sphere. Methods: contains_point, intersects_sphere, intersects_box, intersectRay, distance_to_point, expand_to_point, expand_to_sphere. Static: merge.
+- **XAABox(min, max)** — Axis-aligned bounding box. Methods: contains_point, intersects_box, intersects_sphere, intersectRay, distance_to_point, expand_to_point, expand_to_box, get_center, get_size. Static: merge.
+
+### Splines
+
+- **XBezier3(p0, p1, p2, p3)** — Cubic Bezier (XVec3 control points). Methods: evaluate, tangent, split, length.
+- **XCatmullRom(p0, p1, p2, p3)** — Catmull-Rom spline. Methods: evaluate, tangent, length.
+
+### Frustum
+
+- **XFrustum(left, right, bottom, top, near, far)** — View frustum (6 XPlane objects). Methods: contains_point, intersects_sphere, intersects_box. Static: from_matrix.
+
+### Color
+
+- **XColor(r, g, b, a)** — RGBA color (HDR, no clamping, alpha defaults to 1). Methods: lerp, clamp, to_hsv, to_hsl, to_linear, to_srgb, blend_multiply, blend_screen, blend_overlay, blend_add. Static: from_hsv, from_hsl. Operators: +, -, *, unary -, ==.
+
+### 2D Geometry
+
+- **XCircle(center, radius)** — Circle (XVec2 center). Methods: contains_point, intersects_circle, distance_to_point, closest_point.
+- **XRect2D(min, max)** — Axis-aligned rectangle (XVec2 corners). Methods: contains_point, intersects_rect, intersects_circle, distance_to_point, get_center, get_size, expand_to_point.
+- **XSegment2D(start, end_point)** — 2D line segment. Methods: length, closest_point, distance_to_point, intersects_segment, side.
+- **XPolygon2D(vertices)** — 2D polygon (table of XVec2, min 3). Methods: contains_point, area, centroid, vertex_count, get_edge.
+
+### Noise & Procedural
+
+- **XNoise2D.perlin(x, y)** — 2D Perlin noise, approximately [-1, 1]. Returns 0 at integer coordinates.
+- **XNoise2D.simplex(x, y)** — 2D simplex noise, approximately [-1, 1].
+- **XNoise2D.fbm(x, y, octaves, persistence, lacunarity, noise_func)** — 2D fractal Brownian motion. Defaults: octaves=6, persistence=0.5, lacunarity=2.0, noise_func=XNoise2D.perlin.
+- **XNoise2D.worley(x, y)** — 2D Worley/Voronoi noise. Returns distance to nearest feature point (>= 0).
+- **XNoise3D.perlin(x, y, z)** — 3D Perlin noise, approximately [-1, 1]. Returns 0 at integer coordinates.
+- **XNoise3D.simplex(x, y, z)** — 3D simplex noise, approximately [-1, 1].
+- **XNoise3D.fbm(x, y, z, octaves, persistence, lacunarity, noise_func)** — 3D fractal Brownian motion. Defaults: octaves=6, persistence=0.5, lacunarity=2.0, noise_func=XNoise3D.perlin.
+- **XNoise3D.worley(x, y, z)** — 3D Worley/Voronoi noise. Returns distance to nearest feature point (>= 0).
+
+### Utility Functions
+
+- **XRGB(r, g, b)** — Create RGB color as XVec3.
+- **XRGBA(r, g, b, a)** — Create RGBA color as XVec4.
+- **XMin(a, b)** — Component-wise minimum (vectors or scalars).
+- **XMax(a, b)** — Component-wise maximum (vectors or scalars).
+- **XClamp(val, min, max)** — Clamp value(s) between min and max.
+- **XLerp(a, b, t)** — Linear interpolation (scalars, vectors, XColor); dispatches to slerp for XQuat.
+- **XEaseIn(t)** — Quadratic ease-in.
+- **XEaseOut(t)** — Quadratic ease-out.
+- **XEaseInOut(t)** — Quadratic ease-in-out.
+- **XHermite(p0, m0, p1, m1, t)** — Cubic Hermite interpolation.
+- **XSmoothstep(edge0, edge1, x)** — Smoothstep (3t^2 - 2t^3).
+- **XSmootherstep(edge0, edge1, x)** — Perlin's smootherstep (6t^5 - 15t^4 + 10t^3).
+
+## Conventions
+
+- All types use `Type.new(...)` or callable `Type(...)` constructors.
+- Matrices are column-major flat arrays.
+- Quaternion convention: (x, y, z, w), identity is (0, 0, 0, 1).
+- Euler angles use Z*Y*X convention, in radians.
+- All equality operators use floating-point tolerance (epsilon = 1e-9).
+- All types support `tostring()`.
+- Intersection methods return hit point or nil.
+- Distance methods return signed distance where meaningful.
+
+## Source
+
+- Repository: https://github.com/xyz-ai-dev/xyz_math
+- License: MIT
+- Language: Lua >= 5.1
+- Single file: xyz_math.lua
