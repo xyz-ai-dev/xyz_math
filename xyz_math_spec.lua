@@ -3522,3 +3522,304 @@ describe("XPolygon2D", function()
 		assert.are.near(5, c.y, 1e-9)
 	end)
 end)
+
+-- Noise & Procedural tests
+
+describe("XNoise2D.perlin", function()
+	it("returns a number", function()
+		assert.is_number(XNoise2D.perlin(0.5, 0.5))
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise2D.perlin(1.23, 4.56)
+		local b = XNoise2D.perlin(1.23, 4.56)
+		assert.are.equal(a, b)
+	end)
+
+	it("returns 0 at integer coordinates", function()
+		assert.are.near(0, XNoise2D.perlin(1, 1), 1e-10)
+		assert.are.near(0, XNoise2D.perlin(5, 3), 1e-10)
+		assert.are.near(0, XNoise2D.perlin(0, 0), 1e-10)
+	end)
+
+	it("returns values in approximately [-1, 1]", function()
+		for i = 0, 99 do
+			local v = XNoise2D.perlin(i * 0.137, i * 0.259)
+			assert.is_true(v >= -1.0 and v <= 1.0)
+		end
+	end)
+
+	it("is continuous (nearby inputs produce nearby outputs)", function()
+		local v1 = XNoise2D.perlin(1.0, 1.0)
+		local v2 = XNoise2D.perlin(1.001, 1.001)
+		assert.is_true(math.abs(v1 - v2) < 0.1)
+	end)
+
+	it("different inputs produce different outputs", function()
+		local v1 = XNoise2D.perlin(0.5, 0.5)
+		local v2 = XNoise2D.perlin(3.7, 8.2)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("handles negative coordinates", function()
+		local v = XNoise2D.perlin(-3.5, -7.2)
+		assert.is_number(v)
+		assert.is_true(v >= -1.0 and v <= 1.0)
+	end)
+
+	it("handles large coordinates", function()
+		local v = XNoise2D.perlin(1000.5, 2000.3)
+		assert.is_number(v)
+		assert.is_true(v >= -1.0 and v <= 1.0)
+	end)
+end)
+
+describe("XNoise2D.simplex", function()
+	it("returns a number", function()
+		assert.is_number(XNoise2D.simplex(0.5, 0.5))
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise2D.simplex(1.23, 4.56)
+		local b = XNoise2D.simplex(1.23, 4.56)
+		assert.are.equal(a, b)
+	end)
+
+	it("returns values in approximately [-1, 1]", function()
+		for i = 0, 99 do
+			local v = XNoise2D.simplex(i * 0.137, i * 0.259)
+			assert.is_true(v >= -1.0 and v <= 1.0)
+		end
+	end)
+
+	it("is continuous", function()
+		local v1 = XNoise2D.simplex(1.0, 1.0)
+		local v2 = XNoise2D.simplex(1.001, 1.001)
+		assert.is_true(math.abs(v1 - v2) < 0.1)
+	end)
+
+	it("different inputs produce different outputs", function()
+		local v1 = XNoise2D.simplex(0.5, 0.5)
+		local v2 = XNoise2D.simplex(3.7, 8.2)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("handles negative coordinates", function()
+		local v = XNoise2D.simplex(-3.5, -7.2)
+		assert.is_number(v)
+		assert.is_true(v >= -1.0 and v <= 1.0)
+	end)
+end)
+
+describe("XNoise2D.fbm", function()
+	it("returns a number", function()
+		assert.is_number(XNoise2D.fbm(0.5, 0.5))
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise2D.fbm(1.23, 4.56)
+		local b = XNoise2D.fbm(1.23, 4.56)
+		assert.are.equal(a, b)
+	end)
+
+	it("works with default parameters", function()
+		local v = XNoise2D.fbm(0.5, 0.5)
+		assert.is_number(v)
+	end)
+
+	it("more octaves produces different result", function()
+		local v1 = XNoise2D.fbm(1.37, 2.83, 2)
+		local v2 = XNoise2D.fbm(1.37, 2.83, 6)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("custom persistence affects output", function()
+		local v1 = XNoise2D.fbm(1.37, 2.83, 4, 0.3)
+		local v2 = XNoise2D.fbm(1.37, 2.83, 4, 0.8)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("custom lacunarity affects output", function()
+		local v1 = XNoise2D.fbm(1.37, 2.83, 4, 0.5, 1.5)
+		local v2 = XNoise2D.fbm(1.37, 2.83, 4, 0.5, 3.0)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("accepts custom noise function (simplex)", function()
+		local v = XNoise2D.fbm(1.37, 2.83, 4, 0.5, 2.0, XNoise2D.simplex)
+		assert.is_number(v)
+	end)
+
+	it("normalized output is bounded", function()
+		for i = 0, 49 do
+			local v = XNoise2D.fbm(i * 0.137, i * 0.259)
+			assert.is_true(v >= -1.0 and v <= 1.0)
+		end
+	end)
+end)
+
+describe("XNoise2D.worley", function()
+	it("returns a non-negative number", function()
+		local v = XNoise2D.worley(0.5, 0.5)
+		assert.is_number(v)
+		assert.is_true(v >= 0)
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise2D.worley(1.23, 4.56)
+		local b = XNoise2D.worley(1.23, 4.56)
+		assert.are.equal(a, b)
+	end)
+
+	it("different points produce different distances", function()
+		local v1 = XNoise2D.worley(0.5, 0.5)
+		local v2 = XNoise2D.worley(3.7, 8.2)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("is continuous", function()
+		local v1 = XNoise2D.worley(1.5, 1.5)
+		local v2 = XNoise2D.worley(1.501, 1.501)
+		assert.is_true(math.abs(v1 - v2) < 0.1)
+	end)
+
+	it("handles negative coordinates", function()
+		local v = XNoise2D.worley(-3.5, -7.2)
+		assert.is_number(v)
+		assert.is_true(v >= 0)
+	end)
+end)
+
+describe("XNoise3D.perlin", function()
+	it("returns a number", function()
+		assert.is_number(XNoise3D.perlin(0.5, 0.5, 0.5))
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise3D.perlin(1.23, 4.56, 7.89)
+		local b = XNoise3D.perlin(1.23, 4.56, 7.89)
+		assert.are.equal(a, b)
+	end)
+
+	it("returns 0 at integer coordinates", function()
+		assert.are.near(0, XNoise3D.perlin(1, 1, 1), 1e-10)
+		assert.are.near(0, XNoise3D.perlin(5, 3, 2), 1e-10)
+		assert.are.near(0, XNoise3D.perlin(0, 0, 0), 1e-10)
+	end)
+
+	it("returns values in approximately [-1, 1]", function()
+		for i = 0, 99 do
+			local v = XNoise3D.perlin(i * 0.137, i * 0.259, i * 0.371)
+			assert.is_true(v >= -1.0 and v <= 1.0)
+		end
+	end)
+
+	it("3D produces different values than 2D at same x,y", function()
+		local v2d = XNoise2D.perlin(0.5, 0.5)
+		local v3d = XNoise3D.perlin(0.5, 0.5, 0.5)
+		assert.are_not.equal(v2d, v3d)
+	end)
+
+	it("handles negative coordinates", function()
+		local v = XNoise3D.perlin(-3.5, -7.2, -1.1)
+		assert.is_number(v)
+		assert.is_true(v >= -1.0 and v <= 1.0)
+	end)
+end)
+
+describe("XNoise3D.simplex", function()
+	it("returns a number", function()
+		assert.is_number(XNoise3D.simplex(0.5, 0.5, 0.5))
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise3D.simplex(1.23, 4.56, 7.89)
+		local b = XNoise3D.simplex(1.23, 4.56, 7.89)
+		assert.are.equal(a, b)
+	end)
+
+	it("returns values in approximately [-1, 1]", function()
+		for i = 0, 99 do
+			local v = XNoise3D.simplex(i * 0.137, i * 0.259, i * 0.371)
+			assert.is_true(v >= -1.0 and v <= 1.0)
+		end
+	end)
+
+	it("is continuous", function()
+		local v1 = XNoise3D.simplex(1.0, 1.0, 1.0)
+		local v2 = XNoise3D.simplex(1.001, 1.001, 1.001)
+		assert.is_true(math.abs(v1 - v2) < 0.1)
+	end)
+
+	it("handles negative coordinates", function()
+		local v = XNoise3D.simplex(-3.5, -7.2, -1.1)
+		assert.is_number(v)
+		assert.is_true(v >= -1.0 and v <= 1.0)
+	end)
+end)
+
+describe("XNoise3D.fbm", function()
+	it("returns a number", function()
+		assert.is_number(XNoise3D.fbm(0.5, 0.5, 0.5))
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise3D.fbm(1.23, 4.56, 7.89)
+		local b = XNoise3D.fbm(1.23, 4.56, 7.89)
+		assert.are.equal(a, b)
+	end)
+
+	it("works with default parameters", function()
+		local v = XNoise3D.fbm(0.5, 0.5, 0.5)
+		assert.is_number(v)
+	end)
+
+	it("custom octaves affects output", function()
+		local v1 = XNoise3D.fbm(0.5, 0.5, 0.5, 2)
+		local v2 = XNoise3D.fbm(0.5, 0.5, 0.5, 6)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("custom persistence affects output", function()
+		local v1 = XNoise3D.fbm(0.5, 0.5, 0.5, 4, 0.3)
+		local v2 = XNoise3D.fbm(0.5, 0.5, 0.5, 4, 0.8)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("accepts custom noise function (simplex)", function()
+		local v = XNoise3D.fbm(0.5, 0.5, 0.5, 4, 0.5, 2.0, XNoise3D.simplex)
+		assert.is_number(v)
+	end)
+end)
+
+describe("XNoise3D.worley", function()
+	it("returns a non-negative number", function()
+		local v = XNoise3D.worley(0.5, 0.5, 0.5)
+		assert.is_number(v)
+		assert.is_true(v >= 0)
+	end)
+
+	it("is deterministic", function()
+		local a = XNoise3D.worley(1.23, 4.56, 7.89)
+		local b = XNoise3D.worley(1.23, 4.56, 7.89)
+		assert.are.equal(a, b)
+	end)
+
+	it("different points produce different distances", function()
+		local v1 = XNoise3D.worley(0.5, 0.5, 0.5)
+		local v2 = XNoise3D.worley(3.7, 8.2, 1.1)
+		assert.are_not.equal(v1, v2)
+	end)
+
+	it("is continuous", function()
+		local v1 = XNoise3D.worley(1.5, 1.5, 1.5)
+		local v2 = XNoise3D.worley(1.501, 1.501, 1.501)
+		assert.is_true(math.abs(v1 - v2) < 0.1)
+	end)
+
+	it("handles negative coordinates", function()
+		local v = XNoise3D.worley(-3.5, -7.2, -1.1)
+		assert.is_number(v)
+		assert.is_true(v >= 0)
+	end)
+end)

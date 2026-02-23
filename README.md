@@ -448,6 +448,24 @@ Axis-aligned 2D rectangle defined by min and max XVec2 points.
   * `vertex_count()`: Returns number of vertices
   * `get_edge(i)`: Returns `vertices[i], vertices[i % n + 1]` (wraps around)
 
+### Noise & Procedural
+
+#### XNoise2D
+2D noise generation utilities.
+
+- `XNoise2D.perlin(x, y)`: 2D Perlin noise, returns value in approximately [-1, 1]. Returns 0 at integer coordinates.
+- `XNoise2D.simplex(x, y)`: 2D simplex noise, returns value in approximately [-1, 1].
+- `XNoise2D.fbm(x, y, octaves, persistence, lacunarity, noise_func)`: Fractal Brownian motion. Defaults: octaves=6, persistence=0.5, lacunarity=2.0, noise_func=XNoise2D.perlin. Returns normalized value.
+- `XNoise2D.worley(x, y)`: 2D Worley (Voronoi) noise. Returns Euclidean distance to nearest feature point (>= 0).
+
+#### XNoise3D
+3D noise generation utilities.
+
+- `XNoise3D.perlin(x, y, z)`: 3D Perlin noise, returns value in approximately [-1, 1]. Returns 0 at integer coordinates.
+- `XNoise3D.simplex(x, y, z)`: 3D simplex noise, returns value in approximately [-1, 1].
+- `XNoise3D.fbm(x, y, z, octaves, persistence, lacunarity, noise_func)`: Fractal Brownian motion. Defaults: octaves=6, persistence=0.5, lacunarity=2.0, noise_func=XNoise3D.perlin. Returns normalized value.
+- `XNoise3D.worley(x, y, z)`: 3D Worley (Voronoi) noise. Returns Euclidean distance to nearest feature point (>= 0).
+
 ### Utility Functions
 
 - `XRGB(r, g, b)`: Create an RGB color as XVec3

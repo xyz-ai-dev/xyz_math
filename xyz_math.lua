@@ -2711,3 +2711,370 @@ function XSmootherstep(edge0, edge1, x)
     local t = math.min(math.max((x - edge0) / (edge1 - edge0), 0), 1)
     return t * t * t * (t * (t * 6 - 15) + 10)
 end
+
+-- Noise & Procedural
+
+-- Ken Perlin's standard permutation table (256 entries, values 0-255)
+local noise_perm = {
+    151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,
+    140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
+    247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,
+    57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
+    74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,
+    60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,
+    65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,
+    200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,
+    52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,
+    207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,
+    119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,
+    129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,
+    218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,
+    81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,
+    4,184,204,176,115,121,50,45,127,4,150,254,138,236,205,93,
+    222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
+}
+
+-- Double the table for easy wrapping without modulo in inner loops
+local p = {}
+for i = 0, 511 do
+    p[i] = noise_perm[(i % 256) + 1]
+end
+
+local function noise_fade(t)
+    return t * t * t * (t * (t * 6 - 15) + 10)
+end
+
+local function noise_lerp(t, a, b)
+    return a + t * (b - a)
+end
+
+-- 2D gradient: hash & 3 picks one of 4 directions
+local function noise_grad2(hash, x, y)
+    local h = hash % 4
+    if h == 0 then return x + y
+    elseif h == 1 then return -x + y
+    elseif h == 2 then return x - y
+    else return -x - y
+    end
+end
+
+-- 3D gradient: Ken Perlin's standard 12-direction gradient
+local function noise_grad3(hash, x, y, z)
+    local h = hash % 12
+    local u = h < 8 and x or y
+    local v = h < 4 and y or ((h == 12 or h == 14) and x or z)
+    return ((h % 2 == 0) and u or -u) + ((math.floor(h / 2) % 2 == 0) and v or -v)
+end
+
+-- Permutation table lookups
+local function noise_hash2(ix, iy)
+    return p[(p[ix % 256] + iy) % 256]
+end
+
+local function noise_hash3(ix, iy, iz)
+    return p[(p[(p[ix % 256] + iy) % 256] + iz) % 256]
+end
+
+-- XNoise2D
+
+XNoise2D = {}
+
+function XNoise2D.perlin(x, y)
+    local xi = math.floor(x)
+    local yi = math.floor(y)
+    local xf = x - xi
+    local yf = y - yi
+
+    local u = noise_fade(xf)
+    local v = noise_fade(yf)
+
+    local aa = noise_hash2(xi, yi)
+    local ab = noise_hash2(xi, yi + 1)
+    local ba = noise_hash2(xi + 1, yi)
+    local bb = noise_hash2(xi + 1, yi + 1)
+
+    local x1 = noise_lerp(u, noise_grad2(aa, xf, yf), noise_grad2(ba, xf - 1, yf))
+    local x2 = noise_lerp(u, noise_grad2(ab, xf, yf - 1), noise_grad2(bb, xf - 1, yf - 1))
+
+    return noise_lerp(v, x1, x2)
+end
+
+local SIMPLEX_F2 = 0.5 * (math.sqrt(3) - 1)
+local SIMPLEX_G2 = (3 - math.sqrt(3)) / 6
+
+function XNoise2D.simplex(x, y)
+    local s = (x + y) * SIMPLEX_F2
+    local i = math.floor(x + s)
+    local j = math.floor(y + s)
+
+    local t = (i + j) * SIMPLEX_G2
+    local X0 = i - t
+    local Y0 = j - t
+    local x0 = x - X0
+    local y0 = y - Y0
+
+    local i1, j1
+    if x0 > y0 then
+        i1, j1 = 1, 0
+    else
+        i1, j1 = 0, 1
+    end
+
+    local x1 = x0 - i1 + SIMPLEX_G2
+    local y1 = y0 - j1 + SIMPLEX_G2
+    local x2 = x0 - 1.0 + 2.0 * SIMPLEX_G2
+    local y2 = y0 - 1.0 + 2.0 * SIMPLEX_G2
+
+    local gi0 = noise_hash2(i, j)
+    local gi1 = noise_hash2(i + i1, j + j1)
+    local gi2 = noise_hash2(i + 1, j + 1)
+
+    local n0, n1, n2
+
+    local t0 = 0.5 - x0*x0 - y0*y0
+    if t0 < 0 then
+        n0 = 0
+    else
+        t0 = t0 * t0
+        n0 = t0 * t0 * noise_grad2(gi0, x0, y0)
+    end
+
+    local t1 = 0.5 - x1*x1 - y1*y1
+    if t1 < 0 then
+        n1 = 0
+    else
+        t1 = t1 * t1
+        n1 = t1 * t1 * noise_grad2(gi1, x1, y1)
+    end
+
+    local t2 = 0.5 - x2*x2 - y2*y2
+    if t2 < 0 then
+        n2 = 0
+    else
+        t2 = t2 * t2
+        n2 = t2 * t2 * noise_grad2(gi2, x2, y2)
+    end
+
+    return 70.0 * (n0 + n1 + n2)
+end
+
+function XNoise2D.fbm(x, y, octaves, persistence, lacunarity, noise_func)
+    octaves = octaves or 6
+    persistence = persistence or 0.5
+    lacunarity = lacunarity or 2.0
+    noise_func = noise_func or XNoise2D.perlin
+
+    local total = 0
+    local amplitude = 1
+    local frequency = 1
+    local max_amplitude = 0
+
+    for _ = 1, octaves do
+        total = total + amplitude * noise_func(x * frequency, y * frequency)
+        max_amplitude = max_amplitude + amplitude
+        amplitude = amplitude * persistence
+        frequency = frequency * lacunarity
+    end
+
+    return total / max_amplitude
+end
+
+function XNoise2D.worley(x, y)
+    local xi = math.floor(x)
+    local yi = math.floor(y)
+    local min_dist_sq = math.huge
+
+    for di = -1, 1 do
+        for dj = -1, 1 do
+            local cx = xi + di
+            local cy = yi + dj
+            -- Hash-based pseudo-random feature point within cell
+            local h = noise_hash2(cx, cy)
+            local fx = cx + (h / 255)
+            local h2 = noise_hash2(cx + 31, cy + 17)
+            local fy = cy + (h2 / 255)
+            local dx = fx - x
+            local dy = fy - y
+            local dist_sq = dx * dx + dy * dy
+            if dist_sq < min_dist_sq then
+                min_dist_sq = dist_sq
+            end
+        end
+    end
+
+    return math.sqrt(min_dist_sq)
+end
+
+-- XNoise3D
+
+XNoise3D = {}
+
+function XNoise3D.perlin(x, y, z)
+    local xi = math.floor(x)
+    local yi = math.floor(y)
+    local zi = math.floor(z)
+    local xf = x - xi
+    local yf = y - yi
+    local zf = z - zi
+
+    local u = noise_fade(xf)
+    local v = noise_fade(yf)
+    local w = noise_fade(zf)
+
+    local aaa = noise_hash3(xi, yi, zi)
+    local aab = noise_hash3(xi, yi, zi + 1)
+    local aba = noise_hash3(xi, yi + 1, zi)
+    local abb = noise_hash3(xi, yi + 1, zi + 1)
+    local baa = noise_hash3(xi + 1, yi, zi)
+    local bab = noise_hash3(xi + 1, yi, zi + 1)
+    local bba = noise_hash3(xi + 1, yi + 1, zi)
+    local bbb = noise_hash3(xi + 1, yi + 1, zi + 1)
+
+    local x1 = noise_lerp(u,
+        noise_grad3(aaa, xf, yf, zf),
+        noise_grad3(baa, xf - 1, yf, zf))
+    local x2 = noise_lerp(u,
+        noise_grad3(aba, xf, yf - 1, zf),
+        noise_grad3(bba, xf - 1, yf - 1, zf))
+    local y1 = noise_lerp(v, x1, x2)
+
+    local x3 = noise_lerp(u,
+        noise_grad3(aab, xf, yf, zf - 1),
+        noise_grad3(bab, xf - 1, yf, zf - 1))
+    local x4 = noise_lerp(u,
+        noise_grad3(abb, xf, yf - 1, zf - 1),
+        noise_grad3(bbb, xf - 1, yf - 1, zf - 1))
+    local y2 = noise_lerp(v, x3, x4)
+
+    return noise_lerp(w, y1, y2)
+end
+
+local SIMPLEX_F3 = 1.0 / 3.0
+local SIMPLEX_G3 = 1.0 / 6.0
+
+function XNoise3D.simplex(x, y, z)
+    local s = (x + y + z) * SIMPLEX_F3
+    local i = math.floor(x + s)
+    local j = math.floor(y + s)
+    local k = math.floor(z + s)
+
+    local t = (i + j + k) * SIMPLEX_G3
+    local X0 = i - t
+    local Y0 = j - t
+    local Z0 = k - t
+    local x0 = x - X0
+    local y0 = y - Y0
+    local z0 = z - Z0
+
+    -- Determine which simplex (tetrahedron) we're in
+    local i1, j1, k1, i2, j2, k2
+    if x0 >= y0 then
+        if y0 >= z0 then
+            i1,j1,k1, i2,j2,k2 = 1,0,0, 1,1,0
+        elseif x0 >= z0 then
+            i1,j1,k1, i2,j2,k2 = 1,0,0, 1,0,1
+        else
+            i1,j1,k1, i2,j2,k2 = 0,0,1, 1,0,1
+        end
+    else
+        if y0 < z0 then
+            i1,j1,k1, i2,j2,k2 = 0,0,1, 0,1,1
+        elseif x0 < z0 then
+            i1,j1,k1, i2,j2,k2 = 0,1,0, 0,1,1
+        else
+            i1,j1,k1, i2,j2,k2 = 0,1,0, 1,1,0
+        end
+    end
+
+    local x1 = x0 - i1 + SIMPLEX_G3
+    local y1 = y0 - j1 + SIMPLEX_G3
+    local z1 = z0 - k1 + SIMPLEX_G3
+    local x2 = x0 - i2 + 2.0 * SIMPLEX_G3
+    local y2 = y0 - j2 + 2.0 * SIMPLEX_G3
+    local z2 = z0 - k2 + 2.0 * SIMPLEX_G3
+    local x3 = x0 - 1.0 + 3.0 * SIMPLEX_G3
+    local y3 = y0 - 1.0 + 3.0 * SIMPLEX_G3
+    local z3 = z0 - 1.0 + 3.0 * SIMPLEX_G3
+
+    local gi0 = noise_hash3(i, j, k)
+    local gi1 = noise_hash3(i + i1, j + j1, k + k1)
+    local gi2 = noise_hash3(i + i2, j + j2, k + k2)
+    local gi3 = noise_hash3(i + 1, j + 1, k + 1)
+
+    local n0, n1, n2, n3
+
+    local t0 = 0.6 - x0*x0 - y0*y0 - z0*z0
+    if t0 < 0 then n0 = 0
+    else t0 = t0 * t0; n0 = t0 * t0 * noise_grad3(gi0, x0, y0, z0)
+    end
+
+    local t1 = 0.6 - x1*x1 - y1*y1 - z1*z1
+    if t1 < 0 then n1 = 0
+    else t1 = t1 * t1; n1 = t1 * t1 * noise_grad3(gi1, x1, y1, z1)
+    end
+
+    local t2 = 0.6 - x2*x2 - y2*y2 - z2*z2
+    if t2 < 0 then n2 = 0
+    else t2 = t2 * t2; n2 = t2 * t2 * noise_grad3(gi2, x2, y2, z2)
+    end
+
+    local t3 = 0.6 - x3*x3 - y3*y3 - z3*z3
+    if t3 < 0 then n3 = 0
+    else t3 = t3 * t3; n3 = t3 * t3 * noise_grad3(gi3, x3, y3, z3)
+    end
+
+    return 32.0 * (n0 + n1 + n2 + n3)
+end
+
+function XNoise3D.fbm(x, y, z, octaves, persistence, lacunarity, noise_func)
+    octaves = octaves or 6
+    persistence = persistence or 0.5
+    lacunarity = lacunarity or 2.0
+    noise_func = noise_func or XNoise3D.perlin
+
+    local total = 0
+    local amplitude = 1
+    local frequency = 1
+    local max_amplitude = 0
+
+    for _ = 1, octaves do
+        total = total + amplitude * noise_func(x * frequency, y * frequency, z * frequency)
+        max_amplitude = max_amplitude + amplitude
+        amplitude = amplitude * persistence
+        frequency = frequency * lacunarity
+    end
+
+    return total / max_amplitude
+end
+
+function XNoise3D.worley(x, y, z)
+    local xi = math.floor(x)
+    local yi = math.floor(y)
+    local zi = math.floor(z)
+    local min_dist_sq = math.huge
+
+    for di = -1, 1 do
+        for dj = -1, 1 do
+            for dk = -1, 1 do
+                local cx = xi + di
+                local cy = yi + dj
+                local cz = zi + dk
+                local h = noise_hash3(cx, cy, cz)
+                local fx = cx + (h / 255)
+                local h2 = noise_hash3(cx + 31, cy + 17, cz + 13)
+                local fy = cy + (h2 / 255)
+                local h3 = noise_hash3(cx + 47, cy + 53, cz + 59)
+                local fz = cz + (h3 / 255)
+                local dx = fx - x
+                local dy = fy - y
+                local dz = fz - z
+                local dist_sq = dx * dx + dy * dy + dz * dz
+                if dist_sq < min_dist_sq then
+                    min_dist_sq = dist_sq
+                end
+            end
+        end
+    end
+
+    return math.sqrt(min_dist_sq)
+end
