@@ -59,42 +59,54 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
 2D vector with x, y components.
 
 - `XVec2.new(x, y)` or `XVec2(x, y)`: Create a new 2D vector
-- Operations: 
+- Operations:
   * Addition (`v1 + v2`): Vector addition
   * Subtraction (`v1 - v2`): Vector subtraction
   * Multiplication (`v1 * scalar` or `v1 * v2`): Scalar or component-wise multiplication
-- Methods: 
+  * Unary minus (`-v`): Negation
+  * Equality (`v1 == v2`): Floating-point tolerant comparison
+  * `tostring(v)`: Readable string representation
+- Methods:
   * `dot()`: Dot product
   * `cross()`: 2D cross product (returns scalar)
   * `normalize()`: Returns normalized vector
   * `length()`: Returns vector length
+  * `lerp(other, t)`: Linear interpolation
 
 #### XVec3
 3D vector with x, y, z components.
 
 - `XVec3.new(x, y, z)` or `XVec3(x, y, z)`: Create a new 3D vector
-- Operations: 
+- Operations:
   * Addition (`v1 + v2`): Vector addition
   * Subtraction (`v1 - v2`): Vector subtraction
   * Multiplication (`v1 * scalar` or `v1 * v2`): Scalar or component-wise multiplication
-- Methods: 
+  * Unary minus (`-v`): Negation
+  * Equality (`v1 == v2`): Floating-point tolerant comparison
+  * `tostring(v)`: Readable string representation
+- Methods:
   * `dot()`: Dot product
   * `cross()`: 3D cross product (returns vector)
   * `normalize()`: Returns normalized vector
   * `length()`: Returns vector length
+  * `lerp(other, t)`: Linear interpolation
 
 #### XVec4
 4D vector with x, y, z, w components.
 
 - `XVec4.new(x, y, z, w)` or `XVec4(x, y, z, w)`: Create a new 4D vector
-- Operations: 
+- Operations:
   * Addition (`v1 + v2`): Vector addition
   * Subtraction (`v1 - v2`): Vector subtraction
   * Multiplication (`v1 * scalar` or `v1 * v2`): Scalar or component-wise multiplication
-- Methods: 
+  * Unary minus (`-v`): Negation
+  * Equality (`v1 == v2`): Floating-point tolerant comparison
+  * `tostring(v)`: Readable string representation
+- Methods:
   * `dot()`: Dot product
   * `normalize()`: Returns normalized vector
   * `length()`: Returns vector length
+  * `lerp(other, t)`: Linear interpolation
 
 ### Matrix Types
 
@@ -102,11 +114,13 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
 3x3 matrix for 3D transformations.
 
 - `XMat3.new(...)` or `XMat3(...)`: Create a new 3x3 matrix
-- Operations: 
+- Operations:
   * Multiplication (`m1 * m2` or `m * v`): Matrix-matrix and matrix-vector multiplication
-- Methods: 
+  * Equality (`m1 == m2`): Floating-point tolerant comparison
+  * `tostring(m)`: Readable string representation
+- Methods:
   * `inverse()`: Returns inverse matrix
-- Static methods: 
+- Static methods:
   * `scale()`: Creates scaling matrix
   * `rotation_x()`: Creates rotation matrix around X axis
   * `rotation_y()`: Creates rotation matrix around Y axis
@@ -118,9 +132,13 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
 4x4 matrix for 3D transformations with translation.
 
 - `XMat4.new(...)` or `XMat4(...)`: Create a new 4x4 matrix
-- Operations: 
+- Operations:
   * Multiplication (`m1 * m2` or `m * v`): Matrix-matrix and matrix-vector multiplication
-- Static methods: 
+  * Equality (`m1 == m2`): Floating-point tolerant comparison
+  * `tostring(m)`: Readable string representation
+- Methods:
+  * `inverse()`: Returns inverse matrix (cofactor expansion, errors on singular)
+- Static methods:
   * `scale()`: Creates scaling matrix
   * `translate()`: Creates translation matrix
   * `rotation_x()`: Creates rotation matrix around X axis
@@ -135,7 +153,10 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
 Ray with origin and direction.
 
 - `XRay.new(origin, direction)` or `XRay(origin, direction)`: Create a new ray
-- Methods: 
+- Operations:
+  * Equality (`r1 == r2`): Floating-point tolerant comparison
+  * `tostring(r)`: Readable string representation
+- Methods:
   * `pointAt(t)`: Returns point along ray at distance t
   * `transform(matrix)`: Returns transformed ray
 
@@ -143,7 +164,10 @@ Ray with origin and direction.
 Plane defined by normal and distance.
 
 - `XPlane.new(normal, distance)` or `XPlane(normal, distance)`: Create a new plane
-- Methods: 
+- Operations:
+  * Equality (`p1 == p2`): Floating-point tolerant comparison
+  * `tostring(p)`: Readable string representation
+- Methods:
   * `side(point)`: Returns which side of plane a point is on
   * `intersectRay(ray)`: Returns intersection point with ray
 
@@ -153,26 +177,32 @@ Plane defined by normal and distance.
 Sphere defined by center and radius.
 
 - `XBoundingSphere.new(center, radius)` or `XBoundingSphere(center, radius)`: Create a new bounding sphere
-- Methods: 
+- Operations:
+  * Equality (`s1 == s2`): Floating-point tolerant comparison
+  * `tostring(s)`: Readable string representation
+- Methods:
   * `contains_point()`: Tests if point is inside sphere
   * `intersects_sphere()`: Tests for intersection with another sphere
   * `expand_to_point()`: Expands sphere to contain point
   * `expand_to_sphere()`: Expands sphere to contain another sphere
-- Static methods: 
+- Static methods:
   * `merge(sphere1, sphere2)`: Creates sphere containing both input spheres
 
 #### XAABox
 Axis-aligned bounding box defined by min and max points.
 
 - `XAABox.new(min, max)` or `XAABox(min, max)`: Create a new axis-aligned bounding box
-- Methods: 
+- Operations:
+  * Equality (`b1 == b2`): Floating-point tolerant comparison
+  * `tostring(b)`: Readable string representation
+- Methods:
   * `contains_point()`: Tests if point is inside box
   * `intersects_box()`: Tests for intersection with another box
   * `expand_to_point()`: Expands box to contain point
   * `expand_to_box()`: Expands box to contain another box
   * `get_center()`: Returns center point of box
   * `get_size()`: Returns size of box
-- Static methods: 
+- Static methods:
   * `merge(box1, box2)`: Creates box containing both input boxes
 
 ### Utility Functions
@@ -182,6 +212,7 @@ Axis-aligned bounding box defined by min and max points.
 - `XMin(a, b)`: Component-wise minimum of vectors or minimum of scalars
 - `XMax(a, b)`: Component-wise maximum of vectors or maximum of scalars
 - `XClamp(val, min_val, max_val)`: Clamp value(s) between min and max
+- `XLerp(a, b, t)`: Linear interpolation between scalars or vectors (extrapolation supported)
 
 ## License
 

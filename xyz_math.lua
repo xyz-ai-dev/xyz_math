@@ -1,3 +1,10 @@
+local unpack = unpack or table.unpack
+
+local EPSILON = 1e-9
+local function float_eq(a, b)
+    return math.abs(a - b) <= EPSILON
+end
+
 XVec2 = {}
 XVec2_mt = {__index = XVec2}
 
@@ -54,6 +61,26 @@ end
 XVec2_mt.__add = XVec2.__add
 XVec2_mt.__sub = XVec2.__sub
 XVec2_mt.__mul = XVec2.__mul
+
+XVec2_mt.__tostring = function(self)
+    return string.format("XVec2(%g, %g)", self.x, self.y)
+end
+
+XVec2_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return float_eq(a.x, b.x) and float_eq(a.y, b.y)
+end
+
+XVec2_mt.__unm = function(self)
+    return XVec2.new(-self.x, -self.y)
+end
+
+function XVec2:lerp(other, t)
+    return XVec2.new(
+        self.x + (other.x - self.x) * t,
+        self.y + (other.y - self.y) * t
+    )
+end
 
 XVec3 = {}
 XVec3_mt = {__index = XVec3}
@@ -116,6 +143,27 @@ XVec3_mt.__add = XVec3.__add
 XVec3_mt.__sub = XVec3.__sub
 XVec3_mt.__mul = XVec3.__mul
 
+XVec3_mt.__tostring = function(self)
+    return string.format("XVec3(%g, %g, %g)", self.x, self.y, self.z)
+end
+
+XVec3_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return float_eq(a.x, b.x) and float_eq(a.y, b.y) and float_eq(a.z, b.z)
+end
+
+XVec3_mt.__unm = function(self)
+    return XVec3.new(-self.x, -self.y, -self.z)
+end
+
+function XVec3:lerp(other, t)
+    return XVec3.new(
+        self.x + (other.x - self.x) * t,
+        self.y + (other.y - self.y) * t,
+        self.z + (other.z - self.z) * t
+    )
+end
+
 XVec4 = {}
 XVec4_mt = {__index = XVec4}
 
@@ -167,6 +215,28 @@ end
 XVec4_mt.__add = XVec4.__add
 XVec4_mt.__sub = XVec4.__sub
 XVec4_mt.__mul = XVec4.__mul
+
+XVec4_mt.__tostring = function(self)
+    return string.format("XVec4(%g, %g, %g, %g)", self.x, self.y, self.z, self.w)
+end
+
+XVec4_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return float_eq(a.x, b.x) and float_eq(a.y, b.y) and float_eq(a.z, b.z) and float_eq(a.w, b.w)
+end
+
+XVec4_mt.__unm = function(self)
+    return XVec4.new(-self.x, -self.y, -self.z, -self.w)
+end
+
+function XVec4:lerp(other, t)
+    return XVec4.new(
+        self.x + (other.x - self.x) * t,
+        self.y + (other.y - self.y) * t,
+        self.z + (other.z - self.z) * t,
+        self.w + (other.w - self.w) * t
+    )
+end
 
 function XRGB(r, g, b)
     return XVec3.new(r, g, b)
@@ -321,8 +391,23 @@ function XMat3.from_euler(x, y, z)
 end
 
 
--- Assign metamethod to the metatable
+-- Assign metamethods to the metatable
 XMat3_mt.__mul = XMat3.__mul
+
+XMat3_mt.__tostring = function(self)
+    return string.format("XMat3(%g, %g, %g, %g, %g, %g, %g, %g, %g)",
+        self[1], self[2], self[3],
+        self[4], self[5], self[6],
+        self[7], self[8], self[9])
+end
+
+XMat3_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    for i = 1, 9 do
+        if not float_eq(a[i], b[i]) then return false end
+    end
+    return true
+end
 
 XMat4 = {}
 XMat4_mt = {__index = XMat4}
@@ -368,6 +453,22 @@ function XMat4.__mul(a, b)
     end
 end
 XMat4_mt.__mul = XMat4.__mul
+
+XMat4_mt.__tostring = function(self)
+    return string.format("XMat4(%g, %g, %g, %g, %g, %g, %g, %g, %g, %g, %g, %g, %g, %g, %g, %g)",
+        self[1], self[2], self[3], self[4],
+        self[5], self[6], self[7], self[8],
+        self[9], self[10], self[11], self[12],
+        self[13], self[14], self[15], self[16])
+end
+
+XMat4_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    for i = 1, 16 do
+        if not float_eq(a[i], b[i]) then return false end
+    end
+    return true
+end
 
 -- Creates a scale matrix
 function XMat4.scale(x, y, z)
@@ -459,7 +560,47 @@ function XMat4.from_euler(x, y, z)
 	return rz * ry * rx
 end
 
--- Note: XMat4:inverse() is complex and omitted here for brevity, but can be implemented using cofactor expansion or Gaussian elimination.
+function XMat4:inverse()
+    local a = self
+    local s0 = a[1] * a[6]  - a[2] * a[5]
+    local s1 = a[1] * a[7]  - a[3] * a[5]
+    local s2 = a[1] * a[8]  - a[4] * a[5]
+    local s3 = a[2] * a[7]  - a[3] * a[6]
+    local s4 = a[2] * a[8]  - a[4] * a[6]
+    local s5 = a[3] * a[8]  - a[4] * a[7]
+
+    local c5 = a[11] * a[16] - a[12] * a[15]
+    local c4 = a[10] * a[16] - a[12] * a[14]
+    local c3 = a[10] * a[15] - a[11] * a[14]
+    local c2 = a[9]  * a[16] - a[12] * a[13]
+    local c1 = a[9]  * a[15] - a[11] * a[13]
+    local c0 = a[9]  * a[14] - a[10] * a[13]
+
+    local det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0
+    if math.abs(det) < 1e-12 then
+        error("Matrix is not invertible")
+    end
+    local invdet = 1 / det
+
+    return XMat4.new(
+        ( a[6] * c5 - a[7] * c4 + a[8] * c3) * invdet,
+        (-a[2] * c5 + a[3] * c4 - a[4] * c3) * invdet,
+        ( a[14] * s5 - a[15] * s4 + a[16] * s3) * invdet,
+        (-a[10] * s5 + a[11] * s4 - a[12] * s3) * invdet,
+        (-a[5] * c5 + a[7] * c2 - a[8] * c1) * invdet,
+        ( a[1] * c5 - a[3] * c2 + a[4] * c1) * invdet,
+        (-a[13] * s5 + a[15] * s2 - a[16] * s1) * invdet,
+        ( a[9]  * s5 - a[11] * s2 + a[12] * s1) * invdet,
+        ( a[5] * c4 - a[6] * c2 + a[8] * c0) * invdet,
+        (-a[1] * c4 + a[2] * c2 - a[4] * c0) * invdet,
+        ( a[13] * s4 - a[14] * s2 + a[16] * s0) * invdet,
+        (-a[9]  * s4 + a[10] * s2 - a[12] * s0) * invdet,
+        (-a[5] * c3 + a[6] * c1 - a[7] * c0) * invdet,
+        ( a[1] * c3 - a[2] * c1 + a[3] * c0) * invdet,
+        (-a[13] * s3 + a[14] * s1 - a[15] * s0) * invdet,
+        ( a[9]  * s3 - a[10] * s1 + a[11] * s0) * invdet
+    )
+end
 
 XPlane = {}
 XPlane_mt = {__index = XPlane}
@@ -474,6 +615,15 @@ setmetatable(XPlane, {
         return XPlane.new(normal, distance)
     end
 })
+
+XPlane_mt.__tostring = function(self)
+    return string.format("XPlane(normal=%s, distance=%g)", tostring(self.normal), self.distance)
+end
+
+XPlane_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.normal == b.normal and float_eq(a.distance, b.distance)
+end
 
 function XPlane:side(point)
     local d = self.normal:dot(point) + self.distance
@@ -511,6 +661,15 @@ setmetatable(XRay, {
         return XRay.new(origin, direction)
     end
 })
+
+XRay_mt.__tostring = function(self)
+    return string.format("XRay(origin=%s, direction=%s)", tostring(self.origin), tostring(self.direction))
+end
+
+XRay_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.origin == b.origin and a.direction == b.direction
+end
 
 function XRay:pointAt(t)
     return self.origin + t * self.direction
@@ -580,6 +739,20 @@ function XClamp(val, min_val, max_val)
     end
 end
 
+function XLerp(a, b, t)
+    if type(a) == "number" and type(b) == "number" then
+        return a + (b - a) * t
+    elseif getmetatable(a) == XVec2_mt and getmetatable(b) == XVec2_mt then
+        return a:lerp(b, t)
+    elseif getmetatable(a) == XVec3_mt and getmetatable(b) == XVec3_mt then
+        return a:lerp(b, t)
+    elseif getmetatable(a) == XVec4_mt and getmetatable(b) == XVec4_mt then
+        return a:lerp(b, t)
+    else
+        error("Invalid types for XLerp")
+    end
+end
+
 -- Represents a bounding sphere with center point and radius
 XBoundingSphere = {}
 XBoundingSphere_mt = {__index = XBoundingSphere}
@@ -600,6 +773,15 @@ setmetatable(XBoundingSphere, {
         return XBoundingSphere.new(center, radius)
     end
 })
+
+XBoundingSphere_mt.__tostring = function(self)
+    return string.format("XBoundingSphere(center=%s, radius=%g)", tostring(self.center), self.radius)
+end
+
+XBoundingSphere_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.center == b.center and float_eq(a.radius, b.radius)
+end
 
 -- Returns true if the point is inside the sphere
 function XBoundingSphere:contains_point(point)
@@ -685,6 +867,15 @@ function XAABox.new(min, max)
 		min = min,
 		max = max
 	}, XAABox_mt)
+end
+
+XAABox_mt.__tostring = function(self)
+    return string.format("XAABox(min=%s, max=%s)", tostring(self.min), tostring(self.max))
+end
+
+XAABox_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return a.min == b.min and a.max == b.max
 end
 
 -- Returns true if the point is inside the box

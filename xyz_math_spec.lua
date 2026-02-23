@@ -515,9 +515,295 @@ describe("Utility Functions", function()
 		local min = XVec3(2, 3, -10)
 		local max = XVec3(5, 8, 0)
 		local result = XClamp(v, min, max)
-		
+
 		assert.are.equal(2, result.x)
 		assert.are.equal(8, result.y)
 		assert.are.equal(-5, result.z)
+	end)
+end)
+
+describe("__tostring", function()
+	it("should format XVec2", function()
+		assert.are.equal("XVec2(1, 2)", tostring(XVec2(1, 2)))
+	end)
+
+	it("should format XVec3", function()
+		assert.are.equal("XVec3(1, 2, 3)", tostring(XVec3(1, 2, 3)))
+	end)
+
+	it("should format XVec4", function()
+		assert.are.equal("XVec4(1, 2, 3, 4)", tostring(XVec4(1, 2, 3, 4)))
+	end)
+
+	it("should format XMat3 identity", function()
+		assert.are.equal("XMat3(1, 0, 0, 0, 1, 0, 0, 0, 1)", tostring(XMat3.new()))
+	end)
+
+	it("should format XMat4 identity", function()
+		assert.are.equal("XMat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)", tostring(XMat4.new()))
+	end)
+
+	it("should format XRay", function()
+		local ray = XRay(XVec3(0, 0, 0), XVec3(0, 0, 1))
+		assert.are.equal("XRay(origin=XVec3(0, 0, 0), direction=XVec3(0, 0, 1))", tostring(ray))
+	end)
+
+	it("should format XPlane", function()
+		local plane = XPlane(XVec3(0, 1, 0), -5)
+		assert.are.equal("XPlane(normal=XVec3(0, 1, 0), distance=-5)", tostring(plane))
+	end)
+
+	it("should format XBoundingSphere", function()
+		local sphere = XBoundingSphere(XVec3(1, 2, 3), 5)
+		assert.are.equal("XBoundingSphere(center=XVec3(1, 2, 3), radius=5)", tostring(sphere))
+	end)
+
+	it("should format XAABox", function()
+		local box = XAABox(XVec3(-1, -2, -3), XVec3(1, 2, 3))
+		assert.are.equal("XAABox(min=XVec3(-1, -2, -3), max=XVec3(1, 2, 3))", tostring(box))
+	end)
+
+	it("should suppress trailing zeros with %g", function()
+		assert.are.equal("XVec3(1.5, 2.25, 3)", tostring(XVec3(1.5, 2.25, 3.0)))
+	end)
+
+	it("should handle negative values", function()
+		assert.are.equal("XVec2(-1, -2.5)", tostring(XVec2(-1, -2.5)))
+	end)
+end)
+
+describe("__eq", function()
+	it("should compare XVec2", function()
+		assert.is_true(XVec2(1, 2) == XVec2(1, 2))
+		assert.is_false(XVec2(1, 2) == XVec2(1, 3))
+	end)
+
+	it("should compare XVec3", function()
+		assert.is_true(XVec3(1, 2, 3) == XVec3(1, 2, 3))
+		assert.is_false(XVec3(1, 2, 3) == XVec3(1, 2, 4))
+	end)
+
+	it("should compare XVec4", function()
+		assert.is_true(XVec4(1, 2, 3, 4) == XVec4(1, 2, 3, 4))
+		assert.is_false(XVec4(1, 2, 3, 4) == XVec4(1, 2, 3, 5))
+	end)
+
+	it("should compare XMat3", function()
+		assert.is_true(XMat3.new() == XMat3.new())
+		assert.is_false(XMat3.new() == XMat3.scale(2, 2, 2))
+	end)
+
+	it("should compare XMat4", function()
+		assert.is_true(XMat4.new() == XMat4.new())
+		assert.is_false(XMat4.new() == XMat4.translate(1, 0, 0))
+	end)
+
+	it("should compare XRay", function()
+		local r1 = XRay(XVec3(0, 0, 0), XVec3(0, 0, 1))
+		local r2 = XRay(XVec3(0, 0, 0), XVec3(0, 0, 1))
+		local r3 = XRay(XVec3(1, 0, 0), XVec3(0, 0, 1))
+		assert.is_true(r1 == r2)
+		assert.is_false(r1 == r3)
+	end)
+
+	it("should compare XPlane", function()
+		assert.is_true(XPlane(XVec3(0, 1, 0), 5) == XPlane(XVec3(0, 1, 0), 5))
+		assert.is_false(XPlane(XVec3(0, 1, 0), 5) == XPlane(XVec3(0, 1, 0), 6))
+	end)
+
+	it("should compare XBoundingSphere", function()
+		local s1 = XBoundingSphere(XVec3(0, 0, 0), 5)
+		local s2 = XBoundingSphere(XVec3(0, 0, 0), 5)
+		local s3 = XBoundingSphere(XVec3(0, 0, 0), 6)
+		assert.is_true(s1 == s2)
+		assert.is_false(s1 == s3)
+	end)
+
+	it("should compare XAABox", function()
+		local b1 = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
+		local b2 = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
+		local b3 = XAABox(XVec3(-1, -1, -1), XVec3(2, 2, 2))
+		assert.is_true(b1 == b2)
+		assert.is_false(b1 == b3)
+	end)
+
+	it("should tolerate floating-point error after rotation", function()
+		local v = XVec3(1, 0, 0)
+		local rot = XMat3.rotation_z(math.pi / 2)
+		local rotated = rot * v
+		local back = XMat3.rotation_z(-math.pi / 2) * rotated
+		assert.is_true(back == XVec3(1, 0, 0))
+	end)
+end)
+
+describe("__unm", function()
+	it("should negate XVec2", function()
+		local v = XVec2(1, -2)
+		local neg = -v
+		assert.are.equal(-1, neg.x)
+		assert.are.equal(2, neg.y)
+	end)
+
+	it("should negate XVec3", function()
+		local v = XVec3(1, -2, 3)
+		local neg = -v
+		assert.are.equal(-1, neg.x)
+		assert.are.equal(2, neg.y)
+		assert.are.equal(-3, neg.z)
+	end)
+
+	it("should negate XVec4", function()
+		local v = XVec4(1, -2, 3, -4)
+		local neg = -v
+		assert.are.equal(-1, neg.x)
+		assert.are.equal(2, neg.y)
+		assert.are.equal(-3, neg.z)
+		assert.are.equal(4, neg.w)
+	end)
+
+	it("should satisfy v + (-v) == zero", function()
+		local v = XVec3(3, 4, 5)
+		assert.is_true(v + (-v) == XVec3(0, 0, 0))
+	end)
+
+	it("should not mutate the original vector", function()
+		local v = XVec3(1, 2, 3)
+		local _ = -v
+		assert.are.equal(1, v.x)
+		assert.are.equal(2, v.y)
+		assert.are.equal(3, v.z)
+	end)
+end)
+
+describe("XMat4:inverse", function()
+	it("should invert identity matrix", function()
+		local inv = XMat4.new():inverse()
+		assert.is_true(inv == XMat4.new())
+	end)
+
+	it("should invert translation matrix", function()
+		local m = XMat4.translate(3, 4, 5)
+		local inv = m:inverse()
+		assert.is_true(inv == XMat4.translate(-3, -4, -5))
+	end)
+
+	it("should invert scale matrix", function()
+		local m = XMat4.scale(2, 3, 4)
+		local inv = m:inverse()
+		local expected = XMat4.scale(0.5, 1/3, 0.25)
+		assert.is_true(inv == expected)
+	end)
+
+	it("should invert rotation matrix", function()
+		local m = XMat4.rotation_y(math.pi / 3)
+		local inv = m:inverse()
+		local product = m * inv
+		assert.is_true(product == XMat4.new())
+	end)
+
+	it("should invert compound TRS matrix", function()
+		local t = XMat4.translate(1, 2, 3)
+		local r = XMat4.rotation_z(math.pi / 4)
+		local s = XMat4.scale(2, 2, 2)
+		local trs = t * r * s
+		local inv = trs:inverse()
+		local product = trs * inv
+		assert.is_true(product == XMat4.new())
+	end)
+
+	it("should error on singular matrix", function()
+		local m = XMat4.new(
+			1, 0, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 0
+		)
+		assert.has_error(function() m:inverse() end, "Matrix is not invertible")
+	end)
+
+	it("should roundtrip M * M_inv * v == v", function()
+		local m = XMat4.translate(5, 10, 15) * XMat4.rotation_x(1.0) * XMat4.scale(3, 3, 3)
+		local inv = m:inverse()
+		local v = XVec4(1, 2, 3, 1)
+		local result = inv * (m * v)
+		assert.is_true(result == v)
+	end)
+end)
+
+describe("lerp / XLerp", function()
+	it("should lerp XVec2 at t=0, 0.5, 1", function()
+		local a = XVec2(0, 0)
+		local b = XVec2(10, 20)
+		assert.is_true(a:lerp(b, 0) == XVec2(0, 0))
+		assert.is_true(a:lerp(b, 0.5) == XVec2(5, 10))
+		assert.is_true(a:lerp(b, 1) == XVec2(10, 20))
+	end)
+
+	it("should lerp XVec3 at t=0, 0.5, 1", function()
+		local a = XVec3(0, 0, 0)
+		local b = XVec3(10, 20, 30)
+		assert.is_true(a:lerp(b, 0) == XVec3(0, 0, 0))
+		assert.is_true(a:lerp(b, 0.5) == XVec3(5, 10, 15))
+		assert.is_true(a:lerp(b, 1) == XVec3(10, 20, 30))
+	end)
+
+	it("should lerp XVec4 at t=0, 0.5, 1", function()
+		local a = XVec4(0, 0, 0, 0)
+		local b = XVec4(10, 20, 30, 40)
+		assert.is_true(a:lerp(b, 0) == XVec4(0, 0, 0, 0))
+		assert.is_true(a:lerp(b, 0.5) == XVec4(5, 10, 15, 20))
+		assert.is_true(a:lerp(b, 1) == XVec4(10, 20, 30, 40))
+	end)
+
+	it("should lerp scalars via XLerp", function()
+		assert.are.equal(0, XLerp(0, 10, 0))
+		assert.are.equal(5, XLerp(0, 10, 0.5))
+		assert.are.equal(10, XLerp(0, 10, 1))
+	end)
+
+	it("should dispatch XLerp to vector lerp", function()
+		local a = XVec3(0, 0, 0)
+		local b = XVec3(10, 20, 30)
+		assert.is_true(XLerp(a, b, 0.5) == XVec3(5, 10, 15))
+	end)
+
+	it("should support extrapolation (t outside [0,1])", function()
+		local a = XVec3(0, 0, 0)
+		local b = XVec3(10, 0, 0)
+		assert.is_true(a:lerp(b, 2) == XVec3(20, 0, 0))
+		assert.is_true(a:lerp(b, -1) == XVec3(-10, 0, 0))
+	end)
+
+	it("should lerp colors (RGBA)", function()
+		local red = XRGBA(1, 0, 0, 1)
+		local blue = XRGBA(0, 0, 1, 1)
+		local mid = red:lerp(blue, 0.5)
+		assert.is_true(mid == XRGBA(0.5, 0, 0.5, 1))
+	end)
+
+	it("should error on invalid types", function()
+		assert.has_error(function() XLerp("a", "b", 0.5) end, "Invalid types for XLerp")
+	end)
+
+	it("should lerp XVec2 via XLerp", function()
+		local a = XVec2(0, 0)
+		local b = XVec2(10, 20)
+		assert.is_true(XLerp(a, b, 0.5) == XVec2(5, 10))
+	end)
+end)
+
+describe("unpack compatibility", function()
+	it("should multiply XMat4 * XMat4 correctly", function()
+		local t = XMat4.translate(1, 2, 3)
+		local s = XMat4.scale(2, 2, 2)
+		local result = t * s
+		-- Verify a few key elements of T * S
+		assert.are.equal(2, result[1])   -- scale x
+		assert.are.equal(1, result[4])   -- translate x
+		assert.are.equal(2, result[6])   -- scale y
+		assert.are.equal(2, result[8])   -- translate y
+		assert.are.equal(2, result[11])  -- scale z
+		assert.are.equal(3, result[12])  -- translate z
+		assert.are.equal(1, result[16])  -- homogeneous
 	end)
 end)
