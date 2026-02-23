@@ -602,6 +602,154 @@ function XMat4:inverse()
     )
 end
 
+XQuat = {}
+XQuat_mt = {__index = XQuat}
+
+function XQuat.new(x, y, z, w)
+    return setmetatable({x = x or 0, y = y or 0, z = z or 0, w = w or 1}, XQuat_mt)
+end
+
+setmetatable(XQuat, {
+    __call = function(_, x, y, z, w)
+        return XQuat.new(x, y, z, w)
+    end
+})
+
+function XQuat.__mul(a, b)
+    if getmetatable(b) == XQuat_mt then
+        return XQuat.new(
+            a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+            a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+            a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z
+        )
+    elseif getmetatable(b) == XVec3_mt then
+        local qv = XQuat.new(b.x, b.y, b.z, 0)
+        local qc = XQuat.new(-a.x, -a.y, -a.z, a.w)
+        local result = a * qv * qc
+        return XVec3.new(result.x, result.y, result.z)
+    else
+        error("Invalid multiplication")
+    end
+end
+XQuat_mt.__mul = XQuat.__mul
+
+XQuat_mt.__eq = function(a, b)
+    if getmetatable(a) ~= getmetatable(b) then return false end
+    return float_eq(a.x, b.x) and float_eq(a.y, b.y) and float_eq(a.z, b.z) and float_eq(a.w, b.w)
+end
+
+XQuat_mt.__tostring = function(self)
+    return string.format("XQuat(%g, %g, %g, %g)", self.x, self.y, self.z, self.w)
+end
+
+XQuat_mt.__unm = function(self)
+    return XQuat.new(-self.x, -self.y, -self.z, -self.w)
+end
+
+function XQuat:length()
+    return math.sqrt(self.x^2 + self.y^2 + self.z^2 + self.w^2)
+end
+
+function XQuat:normalize()
+    local len = self:length()
+    if len > 0 then
+        return XQuat.new(self.x / len, self.y / len, self.z / len, self.w / len)
+    end
+    return XQuat.new(0, 0, 0, 1)
+end
+
+function XQuat:dot(other)
+    return self.x * other.x + self.y * other.y + self.z * other.z + self.w * other.w
+end
+
+function XQuat:conjugate()
+    return XQuat.new(-self.x, -self.y, -self.z, self.w)
+end
+
+function XQuat:inverse()
+    local len_sq = self.x^2 + self.y^2 + self.z^2 + self.w^2
+    if len_sq > 0 then
+        local inv = 1 / len_sq
+        return XQuat.new(-self.x * inv, -self.y * inv, -self.z * inv, self.w * inv)
+    end
+    return XQuat.new(0, 0, 0, 1)
+end
+
+function XQuat:slerp(other, t)
+    local d = self:dot(other)
+    local b = other
+
+    if d < 0 then
+        b = XQuat.new(-other.x, -other.y, -other.z, -other.w)
+        d = -d
+    end
+
+    if d > 1 then d = 1 end
+
+    local theta = math.acos(d)
+    local sin_theta = math.sin(theta)
+
+    local s0, s1
+    if sin_theta < 1e-6 then
+        s0 = 1 - t
+        s1 = t
+    else
+        s0 = math.sin((1 - t) * theta) / sin_theta
+        s1 = math.sin(t * theta) / sin_theta
+    end
+
+    return XQuat.new(
+        s0 * self.x + s1 * b.x,
+        s0 * self.y + s1 * b.y,
+        s0 * self.z + s1 * b.z,
+        s0 * self.w + s1 * b.w
+    )
+end
+
+function XQuat:to_mat3()
+    local x, y, z, w = self.x, self.y, self.z, self.w
+    local x2, y2, z2 = x + x, y + y, z + z
+    local xx, xy, xz = x * x2, x * y2, x * z2
+    local yy, yz, zz = y * y2, y * z2, z * z2
+    local wx, wy, wz = w * x2, w * y2, w * z2
+
+    return XMat3.new(
+        1 - (yy + zz), xy - wz,       xz + wy,
+        xy + wz,       1 - (xx + zz), yz - wx,
+        xz - wy,       yz + wx,       1 - (xx + yy)
+    )
+end
+
+function XQuat:to_mat4()
+    local x, y, z, w = self.x, self.y, self.z, self.w
+    local x2, y2, z2 = x + x, y + y, z + z
+    local xx, xy, xz = x * x2, x * y2, x * z2
+    local yy, yz, zz = y * y2, y * z2, z * z2
+    local wx, wy, wz = w * x2, w * y2, w * z2
+
+    return XMat4.new(
+        1 - (yy + zz), xy - wz,       xz + wy,       0,
+        xy + wz,       1 - (xx + zz), yz - wx,       0,
+        xz - wy,       yz + wx,       1 - (xx + yy), 0,
+        0,             0,             0,             1
+    )
+end
+
+function XQuat.from_axis_angle(axis, angle)
+    local n = axis:normalize()
+    local half = angle * 0.5
+    local s = math.sin(half)
+    return XQuat.new(n.x * s, n.y * s, n.z * s, math.cos(half))
+end
+
+function XQuat.from_euler(x, y, z)
+    local qx = XQuat.from_axis_angle(XVec3(1, 0, 0), x)
+    local qy = XQuat.from_axis_angle(XVec3(0, 1, 0), y)
+    local qz = XQuat.from_axis_angle(XVec3(0, 0, 1), z)
+    return qz * qy * qx
+end
+
 XPlane = {}
 XPlane_mt = {__index = XPlane}
 
@@ -748,6 +896,8 @@ function XLerp(a, b, t)
         return a:lerp(b, t)
     elseif getmetatable(a) == XVec4_mt and getmetatable(b) == XVec4_mt then
         return a:lerp(b, t)
+    elseif getmetatable(a) == XQuat_mt and getmetatable(b) == XQuat_mt then
+        return a:slerp(b, t)
     else
         error("Invalid types for XLerp")
     end

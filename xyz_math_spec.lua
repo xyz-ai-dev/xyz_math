@@ -792,6 +792,242 @@ describe("lerp / XLerp", function()
 	end)
 end)
 
+describe("XQuat", function()
+	-- Constructor
+	it("should create identity quaternion by default", function()
+		local q = XQuat.new()
+		assert.are.equal(0, q.x)
+		assert.are.equal(0, q.y)
+		assert.are.equal(0, q.z)
+		assert.are.equal(1, q.w)
+	end)
+
+	it("should create quaternion with specified values", function()
+		local q = XQuat.new(1, 2, 3, 4)
+		assert.are.equal(1, q.x)
+		assert.are.equal(2, q.y)
+		assert.are.equal(3, q.z)
+		assert.are.equal(4, q.w)
+	end)
+
+	it("should create quaternion using callable syntax", function()
+		local q = XQuat(1, 2, 3, 4)
+		assert.are.equal(1, q.x)
+		assert.are.equal(2, q.y)
+		assert.are.equal(3, q.z)
+		assert.are.equal(4, q.w)
+	end)
+
+	-- Metamethods
+	it("should format __tostring", function()
+		assert.are.equal("XQuat(0, 0, 0, 1)", tostring(XQuat()))
+		assert.are.equal("XQuat(1, 2, 3, 4)", tostring(XQuat(1, 2, 3, 4)))
+	end)
+
+	it("should compare equal quaternions", function()
+		assert.is_true(XQuat(1, 2, 3, 4) == XQuat(1, 2, 3, 4))
+	end)
+
+	it("should compare unequal quaternions", function()
+		assert.is_false(XQuat(1, 2, 3, 4) == XQuat(1, 2, 3, 5))
+	end)
+
+	it("should negate all components with __unm", function()
+		local q = XQuat(1, -2, 3, -4)
+		local neg = -q
+		assert.are.equal(-1, neg.x)
+		assert.are.equal(2, neg.y)
+		assert.are.equal(-3, neg.z)
+		assert.are.equal(4, neg.w)
+	end)
+
+	it("should compute Hamilton product", function()
+		-- 90° around Y then 90° around X
+		local qy = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 2)
+		local qx = XQuat.from_axis_angle(XVec3(1, 0, 0), math.pi / 2)
+		local combined = qx * qy
+		-- Apply combined rotation to (0, 0, -1)
+		local v = combined * XVec3(0, 0, -1)
+		-- 90° Y takes (0,0,-1) -> (-1,0,0), then 90° X leaves x untouched
+		assert.are.near(-1, v.x, 1e-6)
+		assert.are.near(0, v.y, 1e-6)
+		assert.are.near(0, v.z, 1e-6)
+	end)
+
+	-- Instance methods
+	it("should return length 1 for identity quaternion", function()
+		assert.are.near(1, XQuat():length(), 1e-9)
+	end)
+
+	it("should normalize non-unit quaternion", function()
+		local q = XQuat(0, 0, 0, 2)
+		local n = q:normalize()
+		assert.are.near(1, n:length(), 1e-9)
+		assert.are.near(0, n.x, 1e-9)
+		assert.are.near(0, n.y, 1e-9)
+		assert.are.near(0, n.z, 1e-9)
+		assert.are.near(1, n.w, 1e-9)
+	end)
+
+	it("should compute dot product", function()
+		local a = XQuat(1, 2, 3, 4)
+		local b = XQuat(5, 6, 7, 8)
+		assert.are.equal(1*5 + 2*6 + 3*7 + 4*8, a:dot(b))
+	end)
+
+	it("should compute conjugate", function()
+		local q = XQuat(1, 2, 3, 4)
+		local c = q:conjugate()
+		assert.are.equal(-1, c.x)
+		assert.are.equal(-2, c.y)
+		assert.are.equal(-3, c.z)
+		assert.are.equal(4, c.w)
+	end)
+
+	it("should have inverse == conjugate for unit quaternion", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 3)
+		local inv = q:inverse()
+		local conj = q:conjugate()
+		assert.is_true(inv == conj)
+	end)
+
+	it("should convert to_mat3 matching XMat3.rotation_around_axis", function()
+		local axis = XVec3(1, 1, 0):normalize()
+		local angle = math.pi / 3
+		local q = XQuat.from_axis_angle(axis, angle)
+		local m_quat = q:to_mat3()
+		local m_ref = XMat3.rotation_around_axis(axis, angle)
+		assert.is_true(m_quat == m_ref)
+	end)
+
+	it("should convert to_mat4 matching XMat4.rotation_around_axis", function()
+		local axis = XVec3(0, 1, 0)
+		local angle = math.pi / 4
+		local q = XQuat.from_axis_angle(axis, angle)
+		local m_quat = q:to_mat4()
+		local m_ref = XMat4.rotation_around_axis(axis, angle)
+		assert.is_true(m_quat == m_ref)
+	end)
+
+	-- Static constructors
+	it("should create from_axis_angle (90° around Y)", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 2)
+		local s = math.sin(math.pi / 4)
+		local c = math.cos(math.pi / 4)
+		assert.are.near(0, q.x, 1e-9)
+		assert.are.near(s, q.y, 1e-9)
+		assert.are.near(0, q.z, 1e-9)
+		assert.are.near(c, q.w, 1e-9)
+	end)
+
+	it("should create identity from_axis_angle with 0 angle", function()
+		local q = XQuat.from_axis_angle(XVec3(1, 0, 0), 0)
+		assert.is_true(q == XQuat())
+	end)
+
+	it("should create from_euler matching XMat4.from_euler via to_mat4", function()
+		local x, y, z = 0.3, 0.5, 0.7
+		local q = XQuat.from_euler(x, y, z)
+		local m_quat = q:to_mat4()
+		local m_ref = XMat4.from_euler(x, y, z)
+		assert.is_true(m_quat == m_ref)
+	end)
+
+	it("should create identity from_euler with (0, 0, 0)", function()
+		local q = XQuat.from_euler(0, 0, 0)
+		assert.is_true(q == XQuat())
+	end)
+
+	-- slerp
+	it("should return start at slerp t=0", function()
+		local a = XQuat.from_axis_angle(XVec3(0, 1, 0), 0)
+		local b = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi)
+		assert.is_true(a:slerp(b, 0) == a)
+	end)
+
+	it("should return end at slerp t=1", function()
+		local a = XQuat.from_axis_angle(XVec3(0, 1, 0), 0)
+		local b = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 2)
+		assert.is_true(a:slerp(b, 1) == b)
+	end)
+
+	it("should compute slerp midpoint at t=0.5", function()
+		local a = XQuat.from_axis_angle(XVec3(0, 1, 0), 0)
+		local b = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 2)
+		local mid = a:slerp(b, 0.5)
+		local expected = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 4)
+		assert.is_true(mid == expected)
+	end)
+
+	it("should take shortest path when dot < 0", function()
+		local a = XQuat.from_axis_angle(XVec3(0, 1, 0), 0)
+		-- -a represents same rotation but antipodal
+		local b = XQuat.new(-a.x, -a.y, -a.z, -a.w)
+		local result = a:slerp(b, 0.5)
+		-- Should stay at identity (shortest path between q and -q is no rotation)
+		assert.are.near(0, result.x, 1e-6)
+		assert.are.near(0, result.y, 1e-6)
+		assert.are.near(0, result.z, 1e-6)
+		assert.are.near(1, math.abs(result.w), 1e-6)
+	end)
+
+	it("should handle nearly-parallel slerp fallback", function()
+		local a = XQuat()
+		-- Nearly identical quaternion
+		local b = XQuat(1e-8, 0, 0, 1)
+		b = b:normalize()
+		local result = a:slerp(b, 0.5)
+		assert.are.near(1, result:length(), 1e-6)
+	end)
+
+	-- Rotation of vectors
+	it("should rotate vector 90° around Y: (1,0,0) -> (0,0,-1)", function()
+		local q = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 2)
+		local v = q * XVec3(1, 0, 0)
+		assert.are.near(0, v.x, 1e-6)
+		assert.are.near(0, v.y, 1e-6)
+		assert.are.near(-1, v.z, 1e-6)
+	end)
+
+	it("should leave vector unchanged with identity quat", function()
+		local q = XQuat()
+		local v = q * XVec3(1, 2, 3)
+		assert.are.near(1, v.x, 1e-6)
+		assert.are.near(2, v.y, 1e-6)
+		assert.are.near(3, v.z, 1e-6)
+	end)
+
+	it("should match mat4 * vec4 vs quat * vec3 roundtrip", function()
+		local axis = XVec3(1, 1, 1):normalize()
+		local angle = 1.23
+		local q = XQuat.from_axis_angle(axis, angle)
+		local m = q:to_mat4()
+		local v = XVec3(3, 4, 5)
+		local v_quat = q * v
+		local v_mat = m * XVec4(v.x, v.y, v.z, 1)
+		assert.are.near(v_quat.x, v_mat.x, 1e-6)
+		assert.are.near(v_quat.y, v_mat.y, 1e-6)
+		assert.are.near(v_quat.z, v_mat.z, 1e-6)
+	end)
+
+	-- XLerp integration
+	it("should dispatch XLerp to slerp for XQuat", function()
+		local a = XQuat.from_axis_angle(XVec3(0, 1, 0), 0)
+		local b = XQuat.from_axis_angle(XVec3(0, 1, 0), math.pi / 2)
+		local result = XLerp(a, b, 0.5)
+		local expected = a:slerp(b, 0.5)
+		assert.is_true(result == expected)
+	end)
+
+	it("should match XLerp at t=0.5 with slerp at t=0.5", function()
+		local a = XQuat.from_euler(0.1, 0.2, 0.3)
+		local b = XQuat.from_euler(1.0, 0.5, 0.8)
+		local via_xlerp = XLerp(a, b, 0.5)
+		local via_slerp = a:slerp(b, 0.5)
+		assert.is_true(via_xlerp == via_slerp)
+	end)
+end)
+
 describe("unpack compatibility", function()
 	it("should multiply XMat4 * XMat4 correctly", function()
 		local t = XMat4.translate(1, 2, 3)

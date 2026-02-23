@@ -147,6 +147,29 @@ local box = XAABox(XVec3(-1, -1, -1), XVec3(1, 1, 1))
   * `rotation_around_axis()`: Creates rotation matrix around arbitrary axis
   * `from_euler()`: Creates rotation matrix from Euler angles
 
+#### XQuat
+Quaternion with x, y, z, w components (`w=1` identity). Avoids gimbal lock and interpolates smoothly via slerp.
+
+- `XQuat.new(x, y, z, w)` or `XQuat(x, y, z, w)`: Create a new quaternion (defaults to identity `0, 0, 0, 1`)
+- Operations:
+  * Multiplication (`q1 * q2`): Hamilton product (compose rotations)
+  * Multiplication (`q * vec3`): Rotate an XVec3 by the quaternion
+  * Unary minus (`-q`): Negate all components (antipodal quaternion)
+  * Equality (`q1 == q2`): Floating-point tolerant comparison
+  * `tostring(q)`: Readable string representation
+- Methods:
+  * `length()`: Quaternion magnitude
+  * `normalize()`: Returns unit quaternion
+  * `dot(other)`: 4D dot product
+  * `conjugate()`: Returns `(-x, -y, -z, w)`
+  * `inverse()`: Returns inverse quaternion (`conjugate / length²`)
+  * `slerp(other, t)`: Spherical linear interpolation (shortest path)
+  * `to_mat3()`: Convert to XMat3 rotation matrix
+  * `to_mat4()`: Convert to XMat4 rotation matrix
+- Static methods:
+  * `from_axis_angle(axis, angle)`: Create from axis (XVec3) and angle (radians)
+  * `from_euler(x, y, z)`: Create from Euler angles (Z*Y*X convention, radians)
+
 ### Geometric Primitives
 
 #### XRay
@@ -212,7 +235,7 @@ Axis-aligned bounding box defined by min and max points.
 - `XMin(a, b)`: Component-wise minimum of vectors or minimum of scalars
 - `XMax(a, b)`: Component-wise maximum of vectors or maximum of scalars
 - `XClamp(val, min_val, max_val)`: Clamp value(s) between min and max
-- `XLerp(a, b, t)`: Linear interpolation between scalars or vectors (extrapolation supported)
+- `XLerp(a, b, t)`: Linear interpolation between scalars or vectors (extrapolation supported); dispatches to `slerp` for XQuat
 
 ## License
 
